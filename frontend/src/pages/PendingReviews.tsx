@@ -2,25 +2,19 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { motion } from "framer-motion"
 import { Check, X, FileText, Clock } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
-const mockReviews = [
-  {
-    id: "1",
-    author: "divya.madhanasekar",
-    submitted: "2026-04-18 10:30",
-    stem: "Explain the concept of closures in JavaScript. Provide a practical example.",
-    status: "Pending"
-  },
-  {
-    id: "2",
-    author: "bhola.gaurav",
-    submitted: "2026-04-18 14:00",
-    stem: "Describe the CAP theorem.",
-    status: "Pending"
-  }
-]
+import { useSelector, useDispatch } from "react-redux"
+import type { RootState } from "@/store"
+import { updateQuestion } from "@/store/questionsSlice"
+import { UserAvatar } from "@/components/UserAvatar"
 
 export default function PendingReviews() {
+  const dispatch = useDispatch()
+  const allQuestions = useSelector((state: RootState) => state.questions.list)
+  const pendingReviews = allQuestions.filter(q => q.status === "Under Review")
+  const approvedCount = allQuestions.filter(q => q.status === "Approved").length
+  const rejectedCount = allQuestions.filter(q => q.status === "Rejected").length
   const containerVariants = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.1 } }
@@ -47,7 +41,7 @@ export default function PendingReviews() {
             <Clock className="w-5 h-5" />
           </div>
           <div>
-            <div className="font-extrabold text-2xl text-foreground">{mockReviews.length}</div>
+            <div className="font-extrabold text-2xl text-foreground">{pendingReviews.length}</div>
             <div className="text-yellow-600 dark:text-yellow-500/80 text-xs font-bold uppercase tracking-wider">Pending</div>
           </div>
         </div>
@@ -56,7 +50,7 @@ export default function PendingReviews() {
             <Check className="w-5 h-5" />
           </div>
           <div>
-            <div className="font-extrabold text-2xl text-foreground">0</div>
+            <div className="font-extrabold text-2xl text-foreground">{approvedCount}</div>
             <div className="text-green-600 dark:text-green-500/80 text-xs font-bold uppercase tracking-wider">Approved</div>
           </div>
         </div>
@@ -65,7 +59,7 @@ export default function PendingReviews() {
             <X className="w-5 h-5" />
           </div>
           <div>
-            <div className="font-extrabold text-2xl text-foreground">0</div>
+            <div className="font-extrabold text-2xl text-foreground">{rejectedCount}</div>
             <div className="text-red-600 dark:text-red-500/80 text-xs font-bold uppercase tracking-wider">Rejected</div>
           </div>
         </div>
@@ -77,7 +71,11 @@ export default function PendingReviews() {
         animate="show"
         className="space-y-6"
       >
-        {mockReviews.map((review) => (
+        {pendingReviews.length === 0 ? (
+          <div className="p-12 text-center text-muted-foreground bg-card/30 rounded-3xl border border-border/50">
+            No questions are currently under review.
+          </div>
+        ) : pendingReviews.map((review) => (
           <motion.div 
             key={review.id} 
             variants={cardVariants}
@@ -91,18 +89,13 @@ export default function PendingReviews() {
             </Badge>
             
             <div className="flex justify-between text-sm items-center">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground font-bold border border-border">
-                  {review.author.substring(0,2).toUpperCase()}
-                </div>
-                <div>
-                  <div className="text-muted-foreground text-xs uppercase tracking-widest font-semibold mb-0.5">Author</div>
-                  <div className="font-bold text-foreground">{review.author}</div>
-                </div>
+              <div className="flex flex-col gap-1">
+                <div className="text-muted-foreground text-[10px] uppercase tracking-widest font-bold">Author</div>
+                <UserAvatar name="John Doe" role="SME Expert" avatarSize="sm" />
               </div>
               <div className="text-right pr-28">
-                <div className="text-muted-foreground text-xs uppercase tracking-widest font-semibold mb-0.5">Submitted</div>
-                <div className="text-foreground/80 font-medium">{review.submitted}</div>
+                <div className="text-muted-foreground text-xs uppercase tracking-widest font-semibold mb-0.5">Topic</div>
+                <div className="text-foreground/80 font-medium">{review.topic}</div>
               </div>
             </div>
 
@@ -112,9 +105,44 @@ export default function PendingReviews() {
               <p className="font-medium text-lg text-foreground leading-relaxed pr-12">{review.stem}</p>
             </div>
 
-            <Button variant="outline" className="w-full bg-transparent border-primary/30 text-primary hover:bg-primary/10 hover:text-primary transition-all rounded-xl py-6 font-bold text-sm tracking-widest uppercase">
-              View Full Details
-            </Button>
+            <Dialog>
+              <DialogTrigger render={
+                <Button variant="outline" className="w-full bg-transparent border-primary/30 text-primary hover:bg-primary/10 hover:text-primary transition-all rounded-xl py-6 font-bold text-sm tracking-widest uppercase">
+                  View Full Details
+                </Button>
+              } />
+              <DialogContent className="sm:max-w-2xl bg-card border-border/50 backdrop-blur-xl">
+                <DialogHeader>
+                  <DialogTitle className="text-2xl font-bold tracking-tight text-foreground">Question Details</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-6 py-4">
+                  <div className="bg-black/5 dark:bg-black/30 p-5 rounded-2xl border border-border/50 relative">
+                    <div className="text-muted-foreground text-xs uppercase tracking-widest font-bold mb-2">Question Stem</div>
+                    <p className="font-medium text-lg text-foreground leading-relaxed">{review.stem}</p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="text-muted-foreground text-xs uppercase tracking-widest font-bold mb-2">Options</div>
+                    {review.options && review.options.length > 0 ? (
+                      review.options.map((option, index) => (
+                        <div 
+                          key={index} 
+                          className={`p-4 rounded-xl border flex items-center gap-4 transition-colors ${index === review.correctOption ? "bg-green-500/10 border-green-500/50 text-green-700 dark:text-green-400" : "bg-card border-border/50 text-foreground/80"}`}
+                        >
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${index === review.correctOption ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"}`}>
+                            {String.fromCharCode(65 + index)}
+                          </div>
+                          <span className="font-medium text-base">{option}</span>
+                          {index === review.correctOption && <Check className="w-5 h-5 ml-auto text-green-500" />}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-muted-foreground italic">No options provided.</div>
+                    )}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <div className="pt-6 border-t border-border/50 flex items-center gap-4 mt-2">
               <input 
@@ -122,10 +150,10 @@ export default function PendingReviews() {
                 placeholder="Mandatory feedback..." 
                 className="flex-1 rounded-xl border border-border bg-black/5 dark:bg-black/40 px-5 py-4 text-sm text-foreground shadow-inner transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent"
               />
-              <Button className="bg-green-600 hover:bg-green-700 text-white shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:shadow-[0_0_25px_rgba(34,197,94,0.5)] transition-all rounded-xl w-32 py-6 font-bold">
+              <Button onClick={() => dispatch(updateQuestion({...review, status: "Approved"}))} className="bg-green-600 hover:bg-green-700 text-white shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:shadow-[0_0_25px_rgba(34,197,94,0.5)] transition-all rounded-xl w-32 py-6 font-bold">
                 <Check className="w-4 h-4 mr-2" /> Approve
               </Button>
-              <Button className="bg-red-600 hover:bg-red-700 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:shadow-[0_0_25px_rgba(239,68,68,0.5)] transition-all rounded-xl w-32 py-6 font-bold">
+              <Button onClick={() => dispatch(updateQuestion({...review, status: "Rejected"}))} className="bg-red-600 hover:bg-red-700 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:shadow-[0_0_25px_rgba(239,68,68,0.5)] transition-all rounded-xl w-32 py-6 font-bold">
                 <X className="w-4 h-4 mr-2" /> Reject
               </Button>
             </div>
