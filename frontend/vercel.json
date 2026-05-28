@@ -3,6 +3,10 @@
     {
       "source": "/api/(.*)",
       "destination": "https://fiber-subwoofer-dwarf.ngrok-free.dev/api/$1"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }
