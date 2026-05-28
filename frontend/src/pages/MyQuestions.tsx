@@ -24,7 +24,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from "@/components/ui/dropdown-menu"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, UploadCloud, Edit3, ChevronLeft, ChevronRight, Trash2, Loader2, Filter } from "lucide-react"
+import { Plus, UploadCloud, Edit3, ChevronLeft, Trash2, Loader2, Filter } from "lucide-react"
 
 export default function MyQuestions() {
   const dispatch = useDispatch<AppDispatch>()
@@ -439,10 +439,8 @@ export default function MyQuestions() {
                     <div className="flex items-center gap-1">
                       Tech Stack
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-4 w-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-full">
-                            <Filter className={`h-2.5 w-2.5 ${techStackFilter !== "All" ? "text-primary" : ""}`} />
-                          </Button>
+                        <DropdownMenuTrigger className="h-4 w-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-full inline-flex items-center justify-center">
+                          <Filter className={`h-2.5 w-2.5 ${techStackFilter !== "All" ? "text-primary" : ""}`} />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-48 rounded-xl border-border/50">
                           <DropdownMenuRadioGroup value={techStackFilter} onValueChange={setTechStackFilter}>
@@ -459,10 +457,8 @@ export default function MyQuestions() {
                     <div className="flex items-center gap-1">
                       Topic
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-4 w-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-full">
-                            <Filter className={`h-2.5 w-2.5 ${topicFilter !== "All" ? "text-primary" : ""}`} />
-                          </Button>
+                        <DropdownMenuTrigger className="h-4 w-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-full inline-flex items-center justify-center">
+                          <Filter className={`h-2.5 w-2.5 ${topicFilter !== "All" ? "text-primary" : ""}`} />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-48 rounded-xl border-border/50">
                           <DropdownMenuRadioGroup value={topicFilter} onValueChange={setTopicFilter}>
@@ -479,10 +475,8 @@ export default function MyQuestions() {
                     <div className="flex items-center gap-1">
                       Difficulty
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-4 w-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-full">
-                            <Filter className={`h-2.5 w-2.5 ${difficultyFilter !== "All" ? "text-primary" : ""}`} />
-                          </Button>
+                        <DropdownMenuTrigger className="h-4 w-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-full inline-flex items-center justify-center">
+                          <Filter className={`h-2.5 w-2.5 ${difficultyFilter !== "All" ? "text-primary" : ""}`} />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-48 rounded-xl border-border/50">
                           <DropdownMenuRadioGroup value={difficultyFilter} onValueChange={setDifficultyFilter}>
