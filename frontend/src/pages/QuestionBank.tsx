@@ -2,7 +2,7 @@ import { useState, useRef } from "react"
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSelector, useDispatch } from "react-redux"
 import type { RootState } from "@/store"
-import { updateQuestion, assignReviewer } from "@/store/questionsSlice"
+import { editQuestion } from "@/store/questionsSlice"
 import type { Question } from "@/store/questionsSlice"
 import { Button } from "@/components/ui/button"
 import {
@@ -76,17 +76,18 @@ export default function QuestionBank() {
 
   const handleAssignReviewer = () => {
     if (assignData.question && assignData.selectedReviewer) {
-      dispatch(assignReviewer({
-        id: assignData.question.id,
-        reviewerId: assignData.selectedReviewer
-      }));
+      dispatch(editQuestion({
+        ...assignData.question,
+        reviewerId: assignData.selectedReviewer,
+        status: "Under Review"
+      }) as any);
       setAssignData({ question: null, selectedReviewer: "" });
     }
   }
 
   const handleSaveChanges = (status: string) => {
     if (!editFormData) return;
-    dispatch(updateQuestion({ ...editFormData, status }));
+    dispatch(editQuestion({ ...editFormData, status }) as any);
     setEditFormData(null);
   }
 
@@ -119,8 +120,8 @@ export default function QuestionBank() {
           layout
           className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden relative"
         >
-          <div ref={parentRef} className="overflow-y-auto max-h-[60vh] w-full custom-scrollbar relative">
-            <Table>
+          <div ref={parentRef} className="overflow-auto max-h-[60vh] w-full custom-scrollbar relative">
+            <Table wrapperClassName="overflow-visible">
               <TableHeader className="bg-card/95 dark:bg-black/90 sticky top-0 z-20 backdrop-blur-xl shadow-sm border-b border-border/50">
                 <TableRow className="border-0 hover:bg-transparent">
                   <TableHead className="w-[35%] min-w-[250px] text-muted-foreground font-bold uppercase tracking-wider text-xs pl-6">Question</TableHead>
@@ -197,7 +198,7 @@ export default function QuestionBank() {
           
           <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-black/5 dark:bg-black/20 text-sm text-muted-foreground">
             <div className="font-medium">
-              Showing <span className="text-foreground">{filteredQuestions.length}</span> questions (Virtualized)
+              Showing <span className="text-foreground">{filteredQuestions.length}</span> questions
             </div>
           </div>
         </motion.div>

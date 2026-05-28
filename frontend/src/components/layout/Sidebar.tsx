@@ -64,11 +64,11 @@ export default function Sidebar() {
             <Logo className="w-12 h-12 drop-shadow-md dark:drop-shadow-lg" />
           </div>
           <div className="flex flex-col justify-center">
-            <h1 className="text-[32px] font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-400 tracking-tighter leading-none pb-1">
-              Qwizly
+            <h1 className="text-[32px] font-extrabold text-foreground tracking-[0.15em] uppercase leading-none pb-1">
+              QWIZLY
             </h1>
-            <p className="text-[9px] text-muted-foreground font-bold tracking-[0.02em] uppercase leading-none mt-0.5 ml-0.5">
-              Part of Accenture LT&T
+            <p className="text-[10px] text-muted-foreground font-medium leading-none mt-1 self-end">
+              Part of <span className="font-bold text-foreground">Accenture LT&T</span>
             </p>
           </div>
         </motion.div>

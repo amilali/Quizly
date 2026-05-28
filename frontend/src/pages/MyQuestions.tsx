@@ -1,9 +1,9 @@
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import ExcelWorker from "@/workers/excelWorker?worker"
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSelector, useDispatch } from "react-redux"
-import type { RootState } from "@/store"
-import { addQuestion, addQuestionsBulk, updateQuestion, deleteQuestion } from "@/store/questionsSlice"
+import type { RootState, AppDispatch } from "@/store"
+import { createQuestion, createQuestionsBulk, editQuestion, deleteQuestion, fetchQuestions } from "@/store/questionsSlice"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -22,16 +22,30 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from "@/components/ui/dropdown-menu"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, UploadCloud, Edit3, ChevronLeft, ChevronRight, Trash2, Loader2 } from "lucide-react"
+import { Plus, UploadCloud, Edit3, ChevronLeft, ChevronRight, Trash2, Loader2, Filter } from "lucide-react"
 
 export default function MyQuestions() {
-  const dispatch = useDispatch()
+  const dispatch = useDispatch<AppDispatch>()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const parentRef = useRef<HTMLDivElement>(null)
   const questions = useSelector((state: RootState) => state.questions.list)
+  const isLoading = useSelector((state: RootState) => state.questions.isLoading)
+  const { userName } = useSelector((state: RootState) => state.auth)
+
+  useEffect(() => {
+    dispatch(fetchQuestions())
+  }, [dispatch])
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("All")
+  const [techStackFilter, setTechStackFilter] = useState("All")
+  const [topicFilter, setTopicFilter] = useState("All")
+  const [difficultyFilter, setDifficultyFilter] = useState("All")
+
+  const uniqueTechStacks = Array.from(new Set(questions.map(q => q.stack).filter(Boolean)));
+  const uniqueTopics = Array.from(new Set(questions.map(q => q.topic).filter(Boolean)));
+  const uniqueDifficulties = ["Easy", "Medium", "Hard"];
   const [editFormData, setEditFormData] = useState<any>(null)
   
   // Add Question States
@@ -41,11 +55,11 @@ export default function MyQuestions() {
 
   const handleCreateSingle = (status: "Draft" | "Under Review") => {
     const newQ = {
-      id: String(Date.now()),
       ...newQuestionData,
-      status
+      status,
+      creatorId: userName || ""
     };
-    dispatch(addQuestion(newQ));
+    dispatch(createQuestion(newQ));
     setIsAddModalOpen(false);
     setTimeout(() => {
       setAddMode("select");
@@ -62,7 +76,11 @@ export default function MyQuestions() {
       worker.onmessage = (e) => {
         const { success, parsedQuestions, error } = e.data;
         if (success && parsedQuestions.length > 0) {
-          dispatch(addQuestionsBulk(parsedQuestions));
+          const questionsWithCreator = parsedQuestions.map((q: any) => ({
+            ...q,
+            creatorId: userName || ""
+          }));
+          dispatch(createQuestionsBulk(questionsWithCreator));
         } else if (!success) {
           console.error("Error parsing file:", error);
         }
@@ -88,7 +106,7 @@ export default function MyQuestions() {
 
   const handleSaveChanges = (status: "Draft" | "Under Review") => {
     if (!editFormData) return;
-    dispatch(updateQuestion({ ...editFormData, status }));
+    dispatch(editQuestion({ ...editFormData, status }) as any);
     setEditFormData(null);
   }
 
@@ -103,9 +121,20 @@ export default function MyQuestions() {
     }
   }
 
-  const filteredQuestions = activeTab === "All" 
-    ? questions 
-    : questions.filter(q => q.status === activeTab)
+  const getDifficultyBadge = (difficulty: string) => {
+    switch (difficulty) {
+      case "Easy": return <Badge className="bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-500/30 rounded-full px-3 shadow-sm hover:bg-green-200 dark:hover:bg-green-500/30 transition-all">Easy</Badge>;
+      case "Medium": return <Badge className="bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-500/30 rounded-full px-3 shadow-sm hover:bg-yellow-200 dark:hover:bg-yellow-500/30 transition-all">Medium</Badge>;
+      case "Hard": return <Badge className="bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-500/30 rounded-full px-3 shadow-sm hover:bg-red-200 dark:hover:bg-red-500/30 transition-all">Hard</Badge>;
+      default: return <Badge className="rounded-full px-3 transition-all">{difficulty}</Badge>;
+    }
+  }
+
+  let filteredQuestions = questions;
+  if (activeTab !== "All") filteredQuestions = filteredQuestions.filter(q => q.status === activeTab);
+  if (techStackFilter !== "All") filteredQuestions = filteredQuestions.filter(q => q.stack === techStackFilter);
+  if (topicFilter !== "All") filteredQuestions = filteredQuestions.filter(q => q.topic === topicFilter);
+  if (difficultyFilter !== "All") filteredQuestions = filteredQuestions.filter(q => q.difficulty === difficultyFilter);
 
   const rowVirtualizer = useVirtualizer({
     count: filteredQuestions.length,
@@ -379,45 +408,130 @@ export default function MyQuestions() {
       </div>
 
       <Tabs defaultValue="All" value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="mb-6 bg-transparent p-0 flex flex-wrap gap-2 h-auto">
-          {["All", "Draft", "Ready for Review", "Under Review", "Approved", "Rejected"].map(tab => {
-            const count = tab === "All" ? questions.length : questions.filter(q => q.status === tab).length;
-            return (
-              <TabsTrigger 
-                key={tab} 
-                value={tab} 
-                className="rounded-full data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none text-muted-foreground py-2 px-4 font-semibold transition-all duration-300 border border-transparent data-[state=active]:border-primary/20"
-              >
-                {tab} <span className="ml-2 bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded-full text-[10px]">{count}</span>
-              </TabsTrigger>
-            )
-          })}
-        </TabsList>
+        <div className="flex flex-col gap-4 mb-6">
+          <TabsList className="bg-transparent p-0 flex flex-wrap gap-2 h-auto justify-start">
+            {["All", "Draft", "Ready for Review", "Under Review", "Approved", "Rejected"].map(tab => {
+              const count = tab === "All" ? questions.length : questions.filter(q => q.status === tab).length;
+              return (
+                <TabsTrigger 
+                  key={tab} 
+                  value={tab} 
+                  className="rounded-full data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none text-muted-foreground py-2 px-4 font-semibold transition-all duration-300 border border-transparent data-[state=active]:border-primary/20"
+                >
+                  {tab} <span className="ml-2 bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded-full text-[10px]">{count}</span>
+                </TabsTrigger>
+              )
+            })}
+          </TabsList>
+        </div>
         
         <motion.div 
           layout
           className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden relative"
         >
           
-          <div ref={parentRef} className="overflow-y-auto max-h-[55vh] w-full custom-scrollbar relative">
-            <Table>
+          <div ref={parentRef} className="overflow-auto max-h-[55vh] w-full custom-scrollbar relative">
+            <Table wrapperClassName="overflow-visible">
               <TableHeader className="bg-card/95 dark:bg-black/90 sticky top-0 z-20 backdrop-blur-xl shadow-sm border-b border-border/50">
                 <TableRow className="border-0 hover:bg-transparent">
                   <TableHead className="w-[35%] min-w-[250px] text-muted-foreground font-bold uppercase tracking-wider text-xs pl-6">Question Stem</TableHead>
-                  <TableHead className="hidden lg:table-cell text-muted-foreground font-bold uppercase tracking-wider text-xs">Tech Stack</TableHead>
-                  <TableHead className="hidden xl:table-cell text-muted-foreground font-bold uppercase tracking-wider text-xs">Topic</TableHead>
-                  <TableHead className="hidden md:table-cell text-muted-foreground font-bold uppercase tracking-wider text-xs">Difficulty</TableHead>
+                  <TableHead className="hidden lg:table-cell text-muted-foreground font-bold uppercase tracking-wider text-xs">
+                    <div className="flex items-center gap-1">
+                      Tech Stack
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-4 w-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-full">
+                            <Filter className={`h-2.5 w-2.5 ${techStackFilter !== "All" ? "text-primary" : ""}`} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-48 rounded-xl border-border/50">
+                          <DropdownMenuRadioGroup value={techStackFilter} onValueChange={setTechStackFilter}>
+                            <DropdownMenuRadioItem value="All">All</DropdownMenuRadioItem>
+                            {uniqueTechStacks.map(stack => (
+                              <DropdownMenuRadioItem key={stack} value={stack}>{stack}</DropdownMenuRadioItem>
+                            ))}
+                          </DropdownMenuRadioGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </TableHead>
+                  <TableHead className="hidden xl:table-cell text-muted-foreground font-bold uppercase tracking-wider text-xs">
+                    <div className="flex items-center gap-1">
+                      Topic
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-4 w-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-full">
+                            <Filter className={`h-2.5 w-2.5 ${topicFilter !== "All" ? "text-primary" : ""}`} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-48 rounded-xl border-border/50">
+                          <DropdownMenuRadioGroup value={topicFilter} onValueChange={setTopicFilter}>
+                            <DropdownMenuRadioItem value="All">All</DropdownMenuRadioItem>
+                            {uniqueTopics.map(topic => (
+                              <DropdownMenuRadioItem key={topic} value={topic}>{topic}</DropdownMenuRadioItem>
+                            ))}
+                          </DropdownMenuRadioGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </TableHead>
+                  <TableHead className="hidden md:table-cell text-muted-foreground font-bold uppercase tracking-wider text-xs">
+                    <div className="flex items-center gap-1">
+                      Difficulty
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-4 w-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-full">
+                            <Filter className={`h-2.5 w-2.5 ${difficultyFilter !== "All" ? "text-primary" : ""}`} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-48 rounded-xl border-border/50">
+                          <DropdownMenuRadioGroup value={difficultyFilter} onValueChange={setDifficultyFilter}>
+                            <DropdownMenuRadioItem value="All">All</DropdownMenuRadioItem>
+                            {uniqueDifficulties.map(diff => (
+                              <DropdownMenuRadioItem key={diff} value={diff}>{diff}</DropdownMenuRadioItem>
+                            ))}
+                          </DropdownMenuRadioGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </TableHead>
                   <TableHead className="text-muted-foreground font-bold uppercase tracking-wider text-xs">Status</TableHead>
                   <TableHead className="text-right text-muted-foreground font-bold uppercase tracking-wider text-xs pr-6">Actions</TableHead>
                 </TableRow>
               </TableHeader>
             <TableBody>
-              {rowVirtualizer.getVirtualItems().length > 0 && (
-                <TableRow className="border-0 hover:bg-transparent h-0">
-                  <TableCell colSpan={6} className="p-0 border-0" style={{ height: `${rowVirtualizer.getVirtualItems()[0].start}px` }} />
-                </TableRow>
-              )}
-              <AnimatePresence mode="popLayout">
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, idx) => (
+                  <TableRow key={`shimmer-${idx}`} className="border-border/50 animate-pulse">
+                    <TableCell className="py-5 pl-6">
+                      <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-3/4 mb-2"></div>
+                      <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-1/2"></div>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell py-5">
+                      <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-24"></div>
+                    </TableCell>
+                    <TableCell className="hidden xl:table-cell py-5">
+                      <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-32"></div>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell py-5">
+                      <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-16"></div>
+                    </TableCell>
+                    <TableCell className="py-5">
+                      <div className="h-6 bg-black/10 dark:bg-white/10 rounded-full w-24"></div>
+                    </TableCell>
+                    <TableCell className="text-right py-5 pr-6">
+                      <div className="h-8 bg-black/10 dark:bg-white/10 rounded-lg w-16 ml-auto"></div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <>
+                  {rowVirtualizer.getVirtualItems().length > 0 && (
+                    <TableRow className="border-0 hover:bg-transparent h-0">
+                      <TableCell colSpan={6} className="p-0 border-0" style={{ height: `${rowVirtualizer.getVirtualItems()[0].start}px` }} />
+                    </TableRow>
+                  )}
+                  <AnimatePresence mode="popLayout">
                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                   const q = filteredQuestions[virtualRow.index];
                   return (
@@ -435,7 +549,7 @@ export default function MyQuestions() {
                     </TableCell>
                     <TableCell className="hidden lg:table-cell py-5 text-foreground/80">{q.stack}</TableCell>
                     <TableCell className="hidden xl:table-cell py-5 text-foreground/80">{q.topic}</TableCell>
-                    <TableCell className="hidden md:table-cell py-5 font-medium">{q.difficulty}</TableCell>
+                    <TableCell className="hidden md:table-cell py-5 font-medium">{getDifficultyBadge(q.difficulty)}</TableCell>
                     <TableCell className="py-5">{getStatusBadge(q.status)}</TableCell>
                     <TableCell className="text-right py-5 pr-6">
                       {(q.status === "Draft" || q.status === "Rejected") ? (
@@ -472,13 +586,15 @@ export default function MyQuestions() {
                   </TableCell>
                 </TableRow>
               )}
+              </>
+            )}
             </TableBody>
             </Table>
           </div>
           
           <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-black/5 dark:bg-black/20 text-sm text-muted-foreground">
             <div className="font-medium">
-              Showing <span className="text-foreground">{filteredQuestions.length}</span> questions (Virtualized)
+              Showing <span className="text-foreground">{filteredQuestions.length}</span> questions
             </div>
           </div>
         </motion.div>

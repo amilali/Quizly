@@ -6,10 +6,14 @@ export interface AuthState {
   userName: string | null;
 }
 
+const token = localStorage.getItem('token');
+const savedRole = localStorage.getItem('role') as 'SME' | 'Admin' | null;
+const savedUserName = localStorage.getItem('userName');
+
 const initialState: AuthState = {
-  isAuthenticated: false,
-  role: null,
-  userName: null,
+  isAuthenticated: !!token,
+  role: savedRole || null,
+  userName: savedUserName || null,
 };
 
 const authSlice = createSlice({
@@ -20,11 +24,16 @@ const authSlice = createSlice({
       state.isAuthenticated = true;
       state.role = action.payload.role;
       state.userName = action.payload.userName;
+      localStorage.setItem('role', action.payload.role);
+      localStorage.setItem('userName', action.payload.userName);
     },
     logout: (state) => {
       state.isAuthenticated = false;
       state.role = null;
       state.userName = null;
+      localStorage.removeItem('token');
+      localStorage.removeItem('role');
+      localStorage.removeItem('userName');
     },
   }
 });

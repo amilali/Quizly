@@ -6,31 +6,32 @@ import { Button } from "@/components/ui/button"
 import { Logo } from "@/components/Logo"
 import { useNavigate } from "react-router-dom"
 
-export default function Login() {
+export default function Register() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   
   const [userId, setUserId] = useState("")
   const [password, setPassword] = useState("")
+  const [role, setRole] = useState<'SME' | 'ADMIN'>('SME')
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setLoading(true)
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ userId, password }),
+        body: JSON.stringify({ userId, password, role }),
       })
 
       if (!response.ok) {
-        throw new Error('Invalid credentials')
+        throw new Error('Registration failed. User may already exist.')
       }
 
       const data = await response.json()
@@ -73,16 +74,16 @@ export default function Login() {
                 QWIZLY
               </h1>
               <p className="text-[12px] text-muted-foreground font-medium leading-none mt-1 self-end">
-                Part of <span className="font-bold text-foreground">Accenture LT&T</span>
+                Part of <span className="font-bold text-foreground">Accenture</span>
               </p>
             </div>
           </div>
           <h2 className="text-xl font-bold text-foreground tracking-tight text-center">
-            Sign in to your account
+            Create a new account
           </h2>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleRegister} className="space-y-4">
           {error && <div className="p-3 bg-red-500/10 text-red-500 text-sm rounded-xl">{error}</div>}
           
           <div className="space-y-2">
@@ -107,25 +108,34 @@ export default function Login() {
             />
           </div>
 
+          <div className="space-y-2">
+            <select 
+              value={role}
+              onChange={(e) => setRole(e.target.value as 'SME' | 'ADMIN')}
+              className="w-full h-12 px-4 rounded-xl border border-border bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+              <option value="SME">SME</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </div>
+
           <Button 
             type="submit"
             disabled={loading}
             className="w-full h-12 text-lg font-bold rounded-xl"
           >
-            {loading ? "Signing in..." : "Sign in"}
+            {loading ? "Registering..." : "Register"}
           </Button>
         </form>
 
         <div className="mt-6 text-center text-sm text-muted-foreground">
-          Don't have an account?{" "}
-          <button onClick={() => navigate('/register')} className="text-primary hover:underline">
-            Register here
+          Already have an account?{" "}
+          <button onClick={() => navigate('/login')} className="text-primary hover:underline">
+            Login
           </button>
         </div>
 
-        <p className="text-[10px] text-muted-foreground font-bold tracking-widest uppercase text-center mt-12">
-          Sign in to access your dashboard
-        </p>
+
       </motion.div>
     </div>
   )

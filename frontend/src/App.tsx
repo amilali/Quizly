@@ -8,6 +8,7 @@ import { ThemeProvider } from "./components/theme-provider"
 import { useSelector } from "react-redux"
 import type { RootState } from "./store"
 import Login from "./pages/Login"
+import Register from "./pages/Register"
 
 function App() {
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
@@ -17,6 +18,7 @@ function App() {
       <Router>
         {!isAuthenticated ? (
           <Routes>
+            <Route path="/register" element={<Register />} />
             <Route path="*" element={<Login />} />
           </Routes>
         ) : (

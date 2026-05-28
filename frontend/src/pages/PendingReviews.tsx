@@ -5,16 +5,17 @@ import { Check, X, FileText, Clock } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 import { useSelector, useDispatch } from "react-redux"
-import type { RootState } from "@/store"
-import { updateQuestion } from "@/store/questionsSlice"
+import type { RootState, AppDispatch } from "@/store"
+import { editQuestion } from "@/store/questionsSlice"
 import { UserAvatar } from "@/components/UserAvatar"
 
 export default function PendingReviews() {
   const dispatch = useDispatch()
+  const { userName } = useSelector((state: RootState) => state.auth)
   const allQuestions = useSelector((state: RootState) => state.questions.list)
-  const pendingReviews = allQuestions.filter(q => q.status === "Under Review")
-  const approvedCount = allQuestions.filter(q => q.status === "Approved").length
-  const rejectedCount = allQuestions.filter(q => q.status === "Rejected").length
+  const pendingReviews = allQuestions.filter(q => q.status === "Under Review" && q.reviewerId === userName)
+  const approvedCount = allQuestions.filter(q => q.status === "Approved" && q.reviewerId === userName).length
+  const rejectedCount = allQuestions.filter(q => q.status === "Rejected" && q.reviewerId === userName).length
   const containerVariants = {
     hidden: { opacity: 0 },
     show: { opacity: 1, transition: { staggerChildren: 0.1 } }
@@ -150,10 +151,10 @@ export default function PendingReviews() {
                 placeholder="Mandatory feedback..." 
                 className="flex-1 rounded-xl border border-border bg-black/5 dark:bg-black/40 px-5 py-4 text-sm text-foreground shadow-inner transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent"
               />
-              <Button onClick={() => dispatch(updateQuestion({...review, status: "Approved"}))} className="bg-green-600 hover:bg-green-700 text-white shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:shadow-[0_0_25px_rgba(34,197,94,0.5)] transition-all rounded-xl w-32 py-6 font-bold">
+              <Button onClick={() => dispatch(editQuestion({...review, status: "Approved"}) as any)} className="bg-green-600 hover:bg-green-700 text-white shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:shadow-[0_0_25px_rgba(34,197,94,0.5)] transition-all rounded-xl w-32 py-6 font-bold">
                 <Check className="w-4 h-4 mr-2" /> Approve
               </Button>
-              <Button onClick={() => dispatch(updateQuestion({...review, status: "Rejected"}))} className="bg-red-600 hover:bg-red-700 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:shadow-[0_0_25px_rgba(239,68,68,0.5)] transition-all rounded-xl w-32 py-6 font-bold">
+              <Button onClick={() => dispatch(editQuestion({...review, status: "Rejected"}) as any)} className="bg-red-600 hover:bg-red-700 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:shadow-[0_0_25px_rgba(239,68,68,0.5)] transition-all rounded-xl w-32 py-6 font-bold">
                 <X className="w-4 h-4 mr-2" /> Reject
               </Button>
             </div>
