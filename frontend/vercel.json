@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "http://152.59.175.63:8080/api/$1"
+      "destination": "https://fiber-subwoofer-dwarf.ngrok-free.dev/api/$1"
     }
   ]
 }
