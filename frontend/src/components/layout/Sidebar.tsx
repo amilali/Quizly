@@ -68,7 +68,7 @@ export default function Sidebar() {
               QWIZLY
             </h1>
             <p className="text-[10px] text-muted-foreground font-medium leading-none mt-1 self-end">
-              Part of <span className="font-bold text-foreground">Accenture LT&T</span>
+              Part of <span className="font-bold text-foreground">Accenture L&TT</span>
             </p>
           </div>
         </motion.div>
