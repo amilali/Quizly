@@ -109,8 +109,17 @@ const questionsSlice = createSlice({
       .addCase(createQuestion.fulfilled, (state, action) => {
         state.list.unshift(action.payload);
       })
+      .addCase(createQuestionsBulk.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
       .addCase(createQuestionsBulk.fulfilled, (state, action) => {
+        state.isLoading = false;
         state.list = [...action.payload, ...state.list];
+      })
+      .addCase(createQuestionsBulk.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.error.message || 'Failed to upload bulk questions';
       })
       .addCase(editQuestion.fulfilled, (state, action) => {
         const index = state.list.findIndex(q => q.id === action.payload.id);
