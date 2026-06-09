@@ -18,6 +18,8 @@ target/
 *.iws
 *.iml
 *.ipr
+todo.md
+WINDOW_SETUP.md
 
 ### NetBeans ###
 /nbproject/private/
@@ -31,3 +33,5 @@ build/
 
 ### VS Code ###
 .vscode/
+
+
