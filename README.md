@@ -47,7 +47,21 @@ The Java backend runs on port **8081** and handles the API and database connecti
 
 ---
 
-## 3. Frontend Setup (React/Vite)
+## 3. Alternative: Running Backend & Database with Docker
+
+If you have Docker installed, you can spin up the PostgreSQL database and the Spring Boot backend with a single command from the project root directory:
+
+1. Ensure Docker is running.
+2. Set your `OPENAI_API_KEY` in your terminal session.
+3. Run the following command:
+   ```bash
+   docker compose up --build
+   ```
+This will automatically launch the PostgreSQL database, wait for it to be healthy, build the Spring Boot app, and run the backend on port `8081`.
+
+---
+
+## 4. Frontend Setup (React/Vite)
 
 The React frontend runs on port **5173** and uses a proxy to securely route API requests to the Java backend.
 
@@ -66,8 +80,9 @@ The React frontend runs on port **5173** and uses a proxy to securely route API 
 
 ---
 
-## 4. Usage
+## 5. Usage
 
 Once both the backend and frontend servers are running:
 1. Open your web browser and navigate to [http://localhost:5173](http://localhost:5173).
 2. You can log in using the seeded test accounts to explore the application!
+

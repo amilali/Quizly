@@ -1,0 +1,11 @@
+target/
+.mvn/
+mvnw
+mvnw.cmd
+Dockerfile
+.dockerignore
+WINDOWS_SETUP.md
+todo.md
+HELP.md
+.gitattributes
+.gitignore
