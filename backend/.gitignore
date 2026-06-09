@@ -19,7 +19,7 @@ target/
 *.iml
 *.ipr
 todo.md
-WINDOW_SETUP.md
+WINDOWS_SETUP.md
 
 ### NetBeans ###
 /nbproject/private/
