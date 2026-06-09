@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react"
 import ExcelWorker from "@/workers/excelWorker?worker"
-import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSelector, useDispatch } from "react-redux"
 import type { RootState, AppDispatch } from "@/store"
 import { createQuestion, createQuestionsBulk, editQuestion, deleteQuestion, fetchQuestions } from "@/store/questionsSlice"
@@ -24,12 +23,11 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from "@/components/ui/dropdown-menu"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, UploadCloud, Edit3, ChevronLeft, Trash2, Loader2, Filter } from "lucide-react"
+import { Plus, UploadCloud, Edit3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, Loader2, Filter } from "lucide-react"
 
 export default function MyQuestions() {
   const dispatch = useDispatch<AppDispatch>()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const parentRef = useRef<HTMLDivElement>(null)
   const questions = useSelector((state: RootState) => state.questions.list)
   const isLoading = useSelector((state: RootState) => state.questions.isLoading)
   const { userName } = useSelector((state: RootState) => state.auth)
@@ -42,6 +40,15 @@ export default function MyQuestions() {
   const [techStackFilter, setTechStackFilter] = useState("All")
   const [topicFilter, setTopicFilter] = useState("All")
   const [difficultyFilter, setDifficultyFilter] = useState("All")
+
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [activeTab, techStackFilter, topicFilter, difficultyFilter])
 
   const uniqueTechStacks = Array.from(new Set(questions.map(q => q.stack).filter(Boolean)));
   const uniqueTopics = Array.from(new Set(questions.map(q => q.topic).filter(Boolean)));
@@ -136,12 +143,10 @@ export default function MyQuestions() {
   if (topicFilter !== "All") filteredQuestions = filteredQuestions.filter(q => q.topic === topicFilter);
   if (difficultyFilter !== "All") filteredQuestions = filteredQuestions.filter(q => q.difficulty === difficultyFilter);
 
-  const rowVirtualizer = useVirtualizer({
-    count: filteredQuestions.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 73,
-    overscan: 5,
-  })
+  const totalQuestions = filteredQuestions.length;
+  const totalPages = Math.ceil(totalQuestions / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedQuestions = filteredQuestions.slice(startIndex, startIndex + pageSize);
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -430,7 +435,7 @@ export default function MyQuestions() {
           className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden relative"
         >
           
-          <div ref={parentRef} className="overflow-auto max-h-[55vh] w-full custom-scrollbar relative">
+          <div className="overflow-auto max-h-[55vh] w-full custom-scrollbar relative">
             <Table wrapperClassName="overflow-visible">
               <TableHeader className="bg-card/95 dark:bg-black/90 sticky top-0 z-20 backdrop-blur-xl shadow-sm border-b border-border/50">
                 <TableRow className="border-0 hover:bg-transparent">
@@ -493,102 +498,154 @@ export default function MyQuestions() {
                   <TableHead className="text-right text-muted-foreground font-bold uppercase tracking-wider text-xs pr-6">Actions</TableHead>
                 </TableRow>
               </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, idx) => (
-                  <TableRow key={`shimmer-${idx}`} className="border-border/50 animate-pulse">
-                    <TableCell className="py-5 pl-6">
-                      <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-3/4 mb-2"></div>
-                      <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-1/2"></div>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell py-5">
-                      <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-24"></div>
-                    </TableCell>
-                    <TableCell className="hidden xl:table-cell py-5">
-                      <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-32"></div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell py-5">
-                      <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-16"></div>
-                    </TableCell>
-                    <TableCell className="py-5">
-                      <div className="h-6 bg-black/10 dark:bg-white/10 rounded-full w-24"></div>
-                    </TableCell>
-                    <TableCell className="text-right py-5 pr-6">
-                      <div className="h-8 bg-black/10 dark:bg-white/10 rounded-lg w-16 ml-auto"></div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <>
-                  {rowVirtualizer.getVirtualItems().length > 0 && (
-                    <TableRow className="border-0 hover:bg-transparent h-0">
-                      <TableCell colSpan={6} className="p-0 border-0" style={{ height: `${rowVirtualizer.getVirtualItems()[0].start}px` }} />
+              <TableBody>
+                {isLoading ? (
+                  Array.from({ length: 5 }).map((_, idx) => (
+                    <TableRow key={`shimmer-${idx}`} className="border-border/50 animate-pulse">
+                      <TableCell className="py-5 pl-6">
+                        <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-3/4 mb-2"></div>
+                        <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-1/2"></div>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell py-5">
+                        <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-24"></div>
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell py-5">
+                        <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-32"></div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell py-5">
+                        <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-16"></div>
+                      </TableCell>
+                      <TableCell className="py-5">
+                        <div className="h-6 bg-black/10 dark:bg-white/10 rounded-full w-24"></div>
+                      </TableCell>
+                      <TableCell className="text-right py-5 pr-6">
+                        <div className="h-8 bg-black/10 dark:bg-white/10 rounded-lg w-16 ml-auto"></div>
+                      </TableCell>
                     </TableRow>
-                  )}
-                  <AnimatePresence mode="popLayout">
-                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                  const q = filteredQuestions[virtualRow.index];
-                  return (
-                  <motion.tr 
-                    key={q.id}
-                    layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.3 }}
-                    className="border-border/50 hover:bg-black/5 dark:hover:bg-white/[0.02] transition-colors group align-middle"
-                  >
-                    <TableCell className="font-medium py-5 text-foreground pl-6">
-                      <div className="whitespace-normal break-words leading-relaxed pr-4 text-sm">{q.stem}</div>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell py-5 text-foreground/80">{q.stack}</TableCell>
-                    <TableCell className="hidden xl:table-cell py-5 text-foreground/80">{q.topic}</TableCell>
-                    <TableCell className="hidden md:table-cell py-5 font-medium">{getDifficultyBadge(q.difficulty)}</TableCell>
-                    <TableCell className="py-5">{getStatusBadge(q.status)}</TableCell>
-                    <TableCell className="text-right py-5 pr-6">
-                      {(q.status === "Draft" || q.status === "Rejected") ? (
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => setEditFormData({ 
-                            ...q, 
-                            options: q.options || ["", "", "", ""], 
-                            correctOption: q.correctOption ?? 0 
-                          })}
-                          className="text-primary hover:text-primary hover:bg-primary/10 transition-all rounded-lg inline-flex items-center"
+                  ))
+                ) : (
+                  <>
+                    <AnimatePresence mode="popLayout">
+                      {paginatedQuestions.map((q) => (
+                        <motion.tr 
+                          key={q.id}
+                          layout
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ duration: 0.3 }}
+                          className="border-border/50 hover:bg-black/5 dark:hover:bg-white/[0.02] transition-colors group align-middle"
                         >
-                          <Edit3 className="w-4 h-4 mr-2" /> <span>Edit</span>
-                        </Button>
-                      ) : (
-                        <span className="text-muted-foreground text-sm font-semibold tracking-wide flex items-center justify-end pr-2">
-                          Locked
-                        </span>
-                      )}
-                    </TableCell>
-                  </motion.tr>
-                )})}
-              </AnimatePresence>
-              {rowVirtualizer.getVirtualItems().length > 0 && (
-                <TableRow className="border-0 hover:bg-transparent h-0">
-                  <TableCell colSpan={6} className="p-0 border-0" style={{ height: `${rowVirtualizer.getTotalSize() - rowVirtualizer.getVirtualItems()[rowVirtualizer.getVirtualItems().length - 1].end}px` }} />
-                </TableRow>
-              )}
-              {filteredQuestions.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center h-40 text-muted-foreground font-medium border-0">
-                    No questions match this filter.
-                  </TableCell>
-                </TableRow>
-              )}
-              </>
-            )}
-            </TableBody>
+                          <TableCell className="font-medium py-5 text-foreground pl-6">
+                            <div className="whitespace-normal break-words leading-relaxed pr-4 text-sm">{q.stem}</div>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell py-5 text-foreground/80">{q.stack}</TableCell>
+                          <TableCell className="hidden xl:table-cell py-5 text-foreground/80">{q.topic}</TableCell>
+                          <TableCell className="hidden md:table-cell py-5 font-medium">{getDifficultyBadge(q.difficulty)}</TableCell>
+                          <TableCell className="py-5">{getStatusBadge(q.status)}</TableCell>
+                          <TableCell className="text-right py-5 pr-6">
+                            {(q.status === "Draft" || q.status === "Rejected") ? (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => setEditFormData({ 
+                                  ...q, 
+                                  options: q.options || ["", "", "", ""], 
+                                  correctOption: q.correctOption ?? 0 
+                                })}
+                                className="text-primary hover:text-primary hover:bg-primary/10 transition-all rounded-lg inline-flex items-center"
+                              >
+                                <Edit3 className="w-4 h-4 mr-2" /> <span>Edit</span>
+                              </Button>
+                            ) : (
+                              <span className="text-muted-foreground text-sm font-semibold tracking-wide flex items-center justify-end pr-2">
+                                Locked
+                              </span>
+                            )}
+                          </TableCell>
+                        </motion.tr>
+                      ))}
+                    </AnimatePresence>
+                    {filteredQuestions.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center h-40 text-muted-foreground font-medium border-0">
+                          No questions match this filter.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
+                )}
+              </TableBody>
             </Table>
           </div>
           
-          <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-black/5 dark:bg-black/20 text-sm text-muted-foreground">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-border bg-black/5 dark:bg-black/20 text-sm text-muted-foreground">
             <div className="font-medium">
-              Showing <span className="text-foreground">{filteredQuestions.length}</span> questions
+              Showing <span className="text-foreground">{totalQuestions > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + pageSize, totalQuestions)}</span> of <span className="text-foreground">{totalQuestions}</span> questions
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+              <div className="flex items-center gap-2">
+                <span>Rows per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value))
+                    setCurrentPage(1)
+                  }}
+                  className="bg-transparent border border-border/50 rounded-lg px-2 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
+                >
+                  {[5, 10, 20, 50].map((size) => (
+                    <option key={size} value={size} className="bg-background text-foreground">
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(1)}
+                  className="h-8 w-8 rounded-lg"
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  className="h-8 w-8 rounded-lg"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                
+                <span className="text-xs font-semibold px-2">
+                  Page {currentPage} of {totalPages || 1}
+                </span>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  className="h-8 w-8 rounded-lg"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  onClick={() => setCurrentPage(totalPages)}
+                  className="h-8 w-8 rounded-lg"
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </motion.div>
