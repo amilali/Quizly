@@ -1,71 +1,99 @@
 <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="q-grad-main" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#d8b4fe" />
-      <stop offset="50%" stop-color="#a855f7" />
-      <stop offset="100%" stop-color="#7e22ce" />
+    <!-- App icon background gradient -->
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4c1d95" />
+      <stop offset="50%" stop-color="#6d28d9" />
+      <stop offset="100%" stop-color="#7c3aed" />
     </linearGradient>
-    <linearGradient id="q-grad-tail" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#c084fc" />
-      <stop offset="100%" stop-color="#7e22ce" />
+
+    <!-- Q body gradient -->
+    <linearGradient id="q-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5d0fe" />
+      <stop offset="50%" stop-color="#e879f9" />
+      <stop offset="100%" stop-color="#c026d3" />
     </linearGradient>
+
+    <!-- Cap gradient -->
     <linearGradient id="cap-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#a855f7" />
-      <stop offset="100%" stop-color="#6b21a8" />
+      <stop offset="0%" stop-color="#fef9c3" />
+      <stop offset="100%" stop-color="#fbbf24" />
     </linearGradient>
+
+    <!-- Glow filter -->
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3.5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Subtle inner shadow on bg -->
+    <filter id="inner-glow">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
   </defs>
-  <g>
-    <!-- Q Ring -->
-    <path 
-      d="M 45 15 C 22.9 15 5 32.9 5 55 C 5 77.1 22.9 95 45 95 C 62.5 95 77.3 84 83.2 68.6 C 85 63.8 85 58.5 85 55 C 85 32.9 67.1 15 45 15 Z M 45 35 C 56 35 65 44 65 55 C 65 66 56 75 45 75 C 34 75 25 66 25 55 C 25 44 34 35 45 35 Z" 
-      fill="url(#q-grad-main)" 
+
+  <!-- Rounded-square background -->
+  <rect x="2" y="2" width="96" height="96" rx="22" ry="22" fill="url(#bg-grad)" />
+
+  <!-- Subtle top highlight -->
+  <rect x="2" y="2" width="96" height="44" rx="22" ry="22" fill="white" fill-opacity="0.06" />
+
+  <!-- Bottom edge accent line -->
+  <rect x="2" y="82" width="96" height="16" rx="0" ry="0" fill="url(#bg-grad)" />
+  <rect x="2" y="80" width="96" height="18" rx="0" ry="22" fill="#3b0764" fill-opacity="0.4" />
+
+  <!-- Q body (shifted slightly left+down to leave room for cap) -->
+  <g filter="url(#glow)">
+    <path
+      d="M 40 22 C 23 22 10 35 10 52 C 10 69 23 82 40 82 C 53 82 64 74 68.5 63 C 70 59 70 55 70 52 C 70 35 57 22 40 22 Z
+         M 40 37 C 48.8 37 56 44.2 56 53 C 56 61.8 48.8 69 40 69 C 31.2 69 24 61.8 24 53 C 24 44.2 31.2 37 40 37 Z"
+      fill="url(#q-grad)"
     />
-    
-    <!-- Q Tail -->
-    <path 
-      d="M 50 65 Q 65 75 75 95 Q 85 92 90 85 Q 80 65 65 50 Q 55 58 50 65 Z" 
-      fill="url(#q-grad-tail)" 
+    <!-- Q tail -->
+    <path
+      d="M 44 63 Q 56 71 64 85 Q 72 82 76 76 Q 67 61 55 49 Q 47 55 44 63 Z"
+      fill="url(#q-grad)"
     />
-    
-    <!-- Graduation Cap -->
-    <g transform="translate(68, 28) rotate(15) scale(1.4) translate(-50, -50)">
-      <!-- Skull Cap Bowl -->
-      <path 
-        d="M 32,50 V 55 Q 50,65 68,55 V 50" 
-        fill="url(#cap-grad)" 
-        stroke="white" 
-        stroke-width="3" 
-        stroke-linejoin="round" 
-        stroke-linecap="round"
-      />
-      <!-- Top Diamond Board -->
-      <polygon 
-        points="50,38 72,46 50,54 28,46" 
-        fill="url(#cap-grad)" 
-        stroke="white" 
-        stroke-width="3" 
-        stroke-linejoin="round" 
-      />
-      
-      <!-- Tassel Group -->
-      <g>
-        <!-- Tassel String -->
-        <path 
-          d="M 50,46 Q 70,52 68,70" 
-          stroke="white" 
-          stroke-width="2" 
-          fill="none" 
-          stroke-linecap="round"
-        />
-        <!-- Tassel End -->
-        <polygon 
-          points="65,70 71,70 73,78 63,78" 
-          fill="white" 
-          stroke="white"
-          stroke-width="1"
-          stroke-linejoin="round"
-        />
-      </g>
-    </g>
+  </g>
+
+  <!-- Graduation cap — top right, rotated 12deg, golden -->
+  <g transform="translate(72, 26) rotate(12) scale(1.15) translate(-50, -50)" filter="url(#glow)">
+    <!-- Cap bowl -->
+    <path
+      d="M 34,50 V 56 Q 50,66 66,56 V 50"
+      fill="url(#cap-grad)"
+      stroke="#fef3c7"
+      stroke-width="2.5"
+      stroke-linejoin="round"
+      stroke-linecap="round"
+    />
+    <!-- Top board -->
+    <polygon
+      points="50,37 73,46 50,55 27,46"
+      fill="url(#cap-grad)"
+      stroke="#fef3c7"
+      stroke-width="2.5"
+      stroke-linejoin="round"
+    />
+    <!-- Tassel string -->
+    <path
+      d="M 50,46 Q 68,52 66,69"
+      stroke="#fef3c7"
+      stroke-width="2"
+      fill="none"
+      stroke-linecap="round"
+    />
+    <!-- Tassel end -->
+    <polygon
+      points="63,69 69,69 71,77 61,77"
+      fill="#fef3c7"
+      stroke="#fef3c7"
+      stroke-width="1"
+      stroke-linejoin="round"
+    />
   </g>
 </svg>

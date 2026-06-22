@@ -15,7 +15,7 @@ self.onmessage = async (e: MessageEvent) => {
       else if (correctStr === "D") correctOption = 3;
 
       return {
-        id: row["Question ID"]?.toString() || String(Date.now() + Math.random()),
+        // No id — let the DB generate it. Sending a fake id causes JPA to try UPDATE instead of INSERT
         stem: row["Question"] || "",
         stack: row["Technology Stack"] || "",
         topic: row["Topic"] || "",

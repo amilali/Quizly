@@ -1,4 +1,4 @@
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSelector, useDispatch } from "react-redux"
 import type { RootState } from "@/store"
@@ -38,6 +38,7 @@ export default function QuestionBank() {
   const parentRef = useRef<HTMLDivElement>(null)
   
   const questions = useSelector((state: RootState) => state.questions.list)
+  const updatingIds = useSelector((state: RootState) => state.questions.updatingIds) || []
   const { role } = useSelector((state: RootState) => state.auth)
   
   const [activeTab, setActiveTab] = useState("All")
@@ -46,6 +47,36 @@ export default function QuestionBank() {
     question: null,
     selectedReviewer: ""
   })
+  const [availableSMEs, setAvailableSMEs] = useState<string[]>([])
+  const [isFetchingSMEs, setIsFetchingSMEs] = useState(false)
+
+  useEffect(() => {
+    if (assignData.question && assignData.question.stack) {
+      setIsFetchingSMEs(true);
+      const token = localStorage.getItem('token');
+      fetch(`/api/sme-mappings/smes?stackName=${encodeURIComponent(assignData.question.stack)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to fetch SMEs");
+        return res.json();
+      })
+      .then((data: string[]) => {
+        setAvailableSMEs(data);
+        setIsFetchingSMEs(false);
+      })
+      .catch(err => {
+        console.error("Error fetching SMEs, falling back to mock list:", err);
+        setAvailableSMEs(MOCK_SMES);
+        setIsFetchingSMEs(false);
+      });
+    } else {
+      setAvailableSMEs([]);
+    }
+  }, [assignData.question])
+
 
   // Security check - Only Admins should view this component
   if (role !== "Admin") {
@@ -140,6 +171,31 @@ export default function QuestionBank() {
               <AnimatePresence mode="popLayout">
                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                   const q = filteredQuestions[virtualRow.index];
+                  const isUpdating = updatingIds.includes(q.id);
+                  if (isUpdating) {
+                    return (
+                      <TableRow key={`shimmer-${q.id}`} className="border-border/50 animate-pulse bg-black/5 dark:bg-white/5 pointer-events-none">
+                        <TableCell className="py-5 pl-6">
+                          <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-3/4 mb-2"></div>
+                          <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-1/2"></div>
+                        </TableCell>
+                        <TableCell className="py-5">
+                          <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-24"></div>
+                        </TableCell>
+                        <TableCell className="py-5">
+                          <div className="h-6 bg-black/10 dark:bg-white/10 rounded-full w-24"></div>
+                        </TableCell>
+                        <TableCell className="py-5">
+                          <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-20"></div>
+                        </TableCell>
+                        <TableCell className="text-right py-5 pr-6">
+                          <div className="flex justify-end gap-2">
+                            <div className="h-8 bg-black/10 dark:bg-white/10 rounded-lg w-16"></div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
                   return (
                   <motion.tr 
                     key={q.id}
@@ -226,8 +282,10 @@ export default function QuestionBank() {
                   onChange={(e) => setAssignData({ ...assignData, selectedReviewer: e.target.value })}
                   className="w-full rounded-xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-5 py-3.5 text-sm text-foreground shadow-inner transition-all focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 appearance-none cursor-pointer"
                 >
-                  <option value="" disabled className="bg-background text-muted-foreground">Choose reviewer mapped for {assignData.question.stack}</option>
-                  {MOCK_SMES.filter(sme => sme !== assignData.question?.creatorId).map(sme => (
+                  <option value="" disabled className="bg-background text-muted-foreground">
+                    {isFetchingSMEs ? "Loading mapped reviewers..." : `Choose reviewer mapped for ${assignData.question.stack}`}
+                  </option>
+                  {availableSMEs.filter(sme => sme !== assignData.question?.creatorId).map(sme => (
                     <option key={sme} value={sme} className="bg-background text-foreground">{sme}</option>
                   ))}
                 </select>

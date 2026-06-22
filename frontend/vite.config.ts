@@ -19,10 +19,18 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8081',
         changeOrigin: true
+      },
+      '/ws': {
+        target: 'http://localhost:8081',
+        changeOrigin: true,
+        ws: true
       }
     }
   },
   build: {
     chunkSizeWarningLimit: 1000
+  },
+  define: {
+    global: 'globalThis'
   }
 })

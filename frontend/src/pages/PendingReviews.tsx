@@ -92,7 +92,7 @@ export default function PendingReviews() {
             <div className="flex justify-between text-sm items-center">
               <div className="flex flex-col gap-1">
                 <div className="text-muted-foreground text-[10px] uppercase tracking-widest font-bold">Author</div>
-                <UserAvatar name="John Doe" role="SME Expert" avatarSize="sm" />
+                <UserAvatar name={review.creatorId || "Unknown Author"} role="SME Expert" avatarSize="sm" />
               </div>
               <div className="text-right pr-28">
                 <div className="text-muted-foreground text-xs uppercase tracking-widest font-semibold mb-0.5">Topic</div>

@@ -27,6 +27,45 @@ Once you've built the package (step 2), you can run the compiled `.jar` file dir
 java -jar target/backend-0.0.1-SNAPSHOT.jar
 ```
 
+## 5. PostgreSQL & Nginx Services (macOS)
+
+### Start Services
+```bash
+# Start PostgreSQL
+brew services start postgresql
+
+# Start Nginx
+brew services start nginx
+```
+
+### Restart Services
+```bash
+# Restart PostgreSQL
+brew services restart postgresql
+
+# Restart Nginx
+brew services restart nginx
+```
+
+### Stop Services
+```bash
+# Stop PostgreSQL
+brew services stop postgresql
+
+# Stop Nginx
+brew services stop nginx
+```
+
+### Initialize Database & User (If "role postgres does not exist" error occurs)
+If you get a `FATAL: role "postgres" does not exist` error on macOS, run these commands to initialize the user and database:
+```bash
+# Create the postgres superuser role
+psql -d postgres -c "CREATE ROLE postgres WITH SUPERUSER LOGIN PASSWORD 'password';"
+
+# Create the quizly database
+psql -d postgres -c "CREATE DATABASE quizly;"
+```
+
 ## Dependencies
 - **Java**: Java 17 or 21 is required (Java 8 is NOT supported for Spring Boot 3+).
 - **Database**: Ensure PostgreSQL is running on `localhost:5432` with a database named `quizly`, user `postgres`, and password `password`.
