@@ -20,7 +20,7 @@ interface GameQuestion {
 interface LeaderboardEntry { playerName: string; score: number }
 type Phase = "join" | "waiting" | "question" | "answer_reveal" | "final"
 
-const spring = { type: "spring", stiffness: 300, damping: 30 }
+const spring = { type: "spring" as const, stiffness: 300, damping: 30 }
 
 export default function PublicGameJoin() {
   const [pin, setPin] = useState("")
@@ -263,12 +263,6 @@ export default function PublicGameJoin() {
 
             {/* Question card */}
             <div className="bg-white rounded-[24px] border border-gray-100 shadow-lg shadow-gray-100 p-5 sm:p-7">
-              {/* Tags */}
-              <div className="flex flex-wrap gap-2 mb-4">
-                {question.stack && <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-violet-100 text-violet-700 border border-violet-200">{question.stack}</span>}
-                {question.topic && <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-gray-100 text-gray-500">{question.topic}</span>}
-                {question.difficulty && <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-gray-100 text-gray-500">{question.difficulty}</span>}
-              </div>
               <p className="text-gray-900 font-bold text-lg sm:text-xl leading-snug">{question.stem}</p>
             </div>
 

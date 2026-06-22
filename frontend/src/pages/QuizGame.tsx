@@ -39,7 +39,6 @@ export default function QuizGame() {
   // ─── Game state ─────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>("home")
   const [pin, setPin] = useState<string | null>(null)
-  const [playerName, setPlayerName] = useState(userName || "")
   const [isHost, setIsHost] = useState(false)
   const [players, setPlayers] = useState<string[]>([])
   const [currentQuestion, setCurrentQuestion] = useState<GameQuestion | null>(null)
@@ -54,7 +53,6 @@ export default function QuizGame() {
 
   // Create game form
   const [createForm, setCreateForm] = useState({ stack: "", topic: "", questionCount: 10 })
-  const [joinPin, setJoinPin] = useState("")
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -97,7 +95,7 @@ export default function QuizGame() {
 
   const { sendAnswer } = useGameSocket({
     pin,
-    playerName,
+    playerName: null,
     onMessage: handleGameMessage,
     onPersonalMessage: handlePersonalMessage,
   })
@@ -138,24 +136,6 @@ export default function QuizGame() {
       setIsHost(true)
       setPlayers([])   // start empty — only /play joiners appear via PLAYER_JOINED events
       setPhase("lobby_host")
-    } catch (e: any) { setError(e.message) }
-    finally { setIsLoading(false) }
-  }
-
-  const handleJoinGame = async () => {
-    if (!joinPin || !playerName) { setError("Enter PIN and your name"); return }
-    setIsLoading(true); setError("")
-    try {
-      const res = await fetch("/api/game/join", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: joinPin, playerName }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Failed to join game")
-      setPin(joinPin)
-      setIsHost(false)
-      setPhase("lobby_player")
     } catch (e: any) { setError(e.message) }
     finally { setIsLoading(false) }
   }
@@ -300,20 +280,6 @@ export default function QuizGame() {
           </motion.div>
         )}
 
-        {/* ── PLAYER LOBBY ── */}
-        {phase === "lobby_player" && (
-          <motion.div key="lobby_player" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="max-w-md space-y-6 text-center">
-            <div className="p-10 rounded-3xl border border-purple-500/30 bg-purple-500/5 backdrop-blur-xl space-y-4 shadow-2xl">
-              <div className="w-16 h-16 rounded-full bg-purple-500/20 flex items-center justify-center mx-auto">
-                <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
-              </div>
-              <p className="font-bold text-xl text-foreground">You're in! 🎉</p>
-              <p className="text-muted-foreground text-sm">Playing as <strong className="text-foreground">{playerName}</strong></p>
-              <div className="bg-black/10 dark:bg-white/5 rounded-2xl px-6 py-3 font-mono text-2xl font-black text-purple-400 tracking-[0.3em]">{pin}</div>
-              <p className="text-xs text-muted-foreground animate-pulse">Waiting for host to start the game...</p>
-            </div>
-          </motion.div>
-        )}
 
         {/* ── QUESTION ── */}
         {phase === "question" && currentQuestion && (
