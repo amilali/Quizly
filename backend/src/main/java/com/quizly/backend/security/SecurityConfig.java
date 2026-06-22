@@ -39,6 +39,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/game/join").permitAll()
                         .requestMatchers("/api/game/*/status").permitAll()
                         .requestMatchers("/").permitAll()
+                        .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
