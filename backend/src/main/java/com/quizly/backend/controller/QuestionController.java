@@ -22,12 +22,14 @@ public class QuestionController {
     private final StackRepository stackRepository;
     private final TopicRepository topicRepository;
     private final UserRepository userRepository;
+    private final com.quizly.backend.service.AiService aiService;
 
-    public QuestionController(QuestionRepository questionRepository, StackRepository stackRepository, TopicRepository topicRepository, UserRepository userRepository) {
+    public QuestionController(QuestionRepository questionRepository, StackRepository stackRepository, TopicRepository topicRepository, UserRepository userRepository, com.quizly.backend.service.AiService aiService) {
         this.questionRepository = questionRepository;
         this.stackRepository = stackRepository;
         this.topicRepository = topicRepository;
         this.userRepository = userRepository;
+        this.aiService = aiService;
     }
 
     private void resolveStackAndTopic(Question question) {
@@ -76,6 +78,7 @@ public class QuestionController {
         }
         resolveStackAndTopic(question);
         Question savedQuestion = questionRepository.save(question);
+        aiService.syncQuestionToVectorStore(savedQuestion);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedQuestion);
     }
 
@@ -91,6 +94,7 @@ public class QuestionController {
             resolveStackAndTopic(q);
         }
         List<Question> savedQuestions = questionRepository.saveAll(questions);
+        savedQuestions.forEach(aiService::syncQuestionToVectorStore);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedQuestions);
     }
 
@@ -113,7 +117,36 @@ public class QuestionController {
             
             resolveStackAndTopic(existingQuestion);
             Question updatedQuestion = questionRepository.save(existingQuestion);
+            aiService.syncQuestionToVectorStore(updatedQuestion);
             return ResponseEntity.ok(updatedQuestion);
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteQuestion(@PathVariable Long id) {
+        if (questionRepository.existsById(id)) {
+            questionRepository.deleteById(id);
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    @PostMapping("/generate")
+    public ResponseEntity<List<Question>> generateQuestions(@RequestBody com.quizly.backend.dto.GenerateRequest request, Principal principal) {
+        String creatorId = principal != null ? principal.getName() : "system";
+        List<Question> generated = aiService.generateQuestions(request, creatorId);
+        
+        // Save to DB before returning
+        for (Question q : generated) {
+            resolveStackAndTopic(q);
+        }
+        List<Question> savedQuestions = questionRepository.saveAll(generated);
+        savedQuestions.forEach(aiService::syncQuestionToVectorStore);
+        return ResponseEntity.status(HttpStatus.CREATED).body(savedQuestions);
+    }
+
+    @PostMapping("/duplicate-check")
+    public ResponseEntity<com.quizly.backend.dto.DuplicateCheckResponse> checkDuplication(@RequestBody Question question) {
+        return ResponseEntity.ok(aiService.checkDuplication(question));
     }
 }

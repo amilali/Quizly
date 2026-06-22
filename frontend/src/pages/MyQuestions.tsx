@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react"
 import ExcelWorker from "@/workers/excelWorker?worker"
 import { useSelector, useDispatch } from "react-redux"
 import type { RootState, AppDispatch } from "@/store"
-import { createQuestion, createQuestionsBulk, editQuestion, deleteQuestion, fetchQuestions } from "@/store/questionsSlice"
+import { createQuestion, createQuestionsBulk, editQuestion, deleteQuestion, fetchQuestions, generateQuestionsAi, checkDuplicateAi } from "@/store/questionsSlice"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -23,13 +23,14 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from "@/components/ui/dropdown-menu"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, UploadCloud, Edit3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, Loader2, Filter } from "lucide-react"
+import { Plus, UploadCloud, Edit3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, Loader2, Filter, Sparkles, AlertTriangle, Code, Tag, Gauge, CheckCircle2, Circle } from "lucide-react"
 
 export default function MyQuestions() {
   const dispatch = useDispatch<AppDispatch>()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const questions = useSelector((state: RootState) => state.questions.list)
   const isLoading = useSelector((state: RootState) => state.questions.isLoading)
+  const updatingIds = useSelector((state: RootState) => state.questions.updatingIds) || []
   const { userName } = useSelector((state: RootState) => state.auth)
 
   useEffect(() => {
@@ -56,9 +57,13 @@ export default function MyQuestions() {
   const [editFormData, setEditFormData] = useState<any>(null)
   
   // Add Question States
-  const [addMode, setAddMode] = useState<"select" | "single" | "bulk">("select")
+  const [addMode, setAddMode] = useState<"select" | "single" | "bulk" | "ai">("select")
   const [newQuestionData, setNewQuestionData] = useState({ stem: "", stack: "", topic: "", difficulty: "Medium", options: ["", "", "", ""], correctOption: 0 })
   const [isUploading, setIsUploading] = useState(false)
+  const [aiFormData, setAiFormData] = useState({ stack: "", topic: "", difficulty: "Medium", count: 5 })
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [duplicateCheckResult, setDuplicateCheckResult] = useState<any>(null)
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
 
   const handleCreateSingle = (status: "Draft" | "Under Review" | "Ready for Review") => {
     const newQ = {
@@ -115,6 +120,50 @@ export default function MyQuestions() {
     if (!editFormData) return;
     dispatch(editQuestion({ ...editFormData, status }) as any);
     setEditFormData(null);
+    setDuplicateCheckResult(null);
+  }
+
+  const handleGenerateAi = async () => {
+    setIsGenerating(true);
+    try {
+      await dispatch(generateQuestionsAi(aiFormData)).unwrap();
+      setIsAddModalOpen(false);
+      setTimeout(() => setAddMode("select"), 300);
+    } catch (err) {
+      console.error("AI Generation failed", err);
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  const handleSaveAndReviewWithDuplicateCheck = async () => {
+    if (!editFormData) return;
+    setIsCheckingDuplicate(true);
+    try {
+      const result = await checkDuplicateAi(editFormData);
+      if (result.isDuplicate) {
+        setDuplicateCheckResult(result);
+      } else {
+        handleSaveChanges("Ready for Review");
+      }
+    } catch (err) {
+      console.error("Duplicate check failed", err);
+    } finally {
+      setIsCheckingDuplicate(false);
+    }
+  }
+
+  const handleManualDuplicateCheck = async () => {
+    if (!editFormData) return;
+    setIsCheckingDuplicate(true);
+    try {
+      const result = await checkDuplicateAi(editFormData);
+      setDuplicateCheckResult(result);
+    } catch (err) {
+      console.error("Duplicate check failed", err);
+    } finally {
+      setIsCheckingDuplicate(false);
+    }
   }
 
   const getStatusBadge = (status: string) => {
@@ -160,29 +209,114 @@ export default function MyQuestions() {
           <DialogTrigger className="bg-primary hover:bg-primary/90 text-white shadow-sm transition-all duration-300 rounded-xl px-6 py-6 font-bold tracking-wide inline-flex items-center justify-center whitespace-nowrap">
             <Plus className="mr-2 h-5 w-5" /> <span className="hidden sm:inline">Add Question</span>
           </DialogTrigger>
-          <DialogContent className={`${addMode === 'single' ? 'sm:max-w-2xl' : 'sm:max-w-md'} bg-background/95 backdrop-blur-3xl border border-border/50 shadow-2xl rounded-3xl ${addMode === 'single' ? 'p-8 max-h-[90vh] overflow-y-auto custom-scrollbar' : ''}`}>
+          <DialogContent className={`sm:max-w-2xl bg-background/95 backdrop-blur-3xl border border-border/50 shadow-2xl rounded-3xl p-8 max-h-[90vh] overflow-y-auto no-scrollbar`}>
             
             {addMode === "select" && (
               <>
-                <DialogHeader className="mb-2">
-                  <DialogTitle className="text-2xl font-bold text-foreground">Create New MCQ</DialogTitle>
-                  <p className="text-sm text-muted-foreground mt-1">Choose your preferred method of question entry.</p>
+                <DialogHeader className="mb-4">
+                  <DialogTitle className="text-3xl font-extrabold text-foreground tracking-tight">Create New MCQ</DialogTitle>
+                  <p className="text-sm text-muted-foreground mt-2 font-medium">Choose your preferred method of question entry.</p>
                 </DialogHeader>
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <Button onClick={() => setAddMode("single")} variant="outline" className="h-32 flex flex-col gap-3 rounded-xl border-border/50 bg-black/5 dark:bg-white/[0.02] hover:bg-primary/5 hover:border-primary/50 transition-all group">
-                    <Plus className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                  <Button onClick={() => setAddMode("single")} variant="outline" className="h-36 flex flex-col gap-4 rounded-2xl border-border/50 bg-black/5 dark:bg-white/[0.02] hover:bg-primary/5 hover:border-primary/50 transition-all group">
+                    <Plus className="w-10 h-10 text-muted-foreground group-hover:text-primary transition-colors" />
                     <div className="text-center">
-                      <div className="font-bold text-foreground">Add from UI</div>
-                      <div className="text-xs text-muted-foreground mt-1">Create a single MCQ</div>
+                      <div className="font-bold text-foreground text-lg">Add from UI</div>
+                      <div className="text-xs text-muted-foreground mt-1.5 font-medium">Create a single MCQ</div>
                     </div>
                   </Button>
-                  <Button onClick={() => setAddMode("bulk")} variant="outline" className="h-32 flex flex-col gap-3 rounded-xl border-border/50 bg-black/5 dark:bg-white/[0.02] hover:bg-primary/5 hover:border-primary/50 transition-all group">
-                    <UploadCloud className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
+                  <Button onClick={() => setAddMode("bulk")} variant="outline" className="h-36 flex flex-col gap-4 rounded-2xl border-border/50 bg-black/5 dark:bg-white/[0.02] hover:bg-primary/5 hover:border-primary/50 transition-all group">
+                    <UploadCloud className="w-10 h-10 text-muted-foreground group-hover:text-primary transition-colors" />
                     <div className="text-center">
-                      <div className="font-bold text-foreground">Bulk Upload</div>
-                      <div className="text-xs text-muted-foreground mt-1">Upload CSV or XLSX</div>
+                      <div className="font-bold text-foreground text-lg">Bulk Upload</div>
+                      <div className="text-xs text-muted-foreground mt-1.5 font-medium">Upload CSV or XLSX</div>
                     </div>
                   </Button>
+                  <Button onClick={() => setAddMode("ai")} variant="outline" className="h-36 flex flex-col gap-4 rounded-2xl border-border/50 bg-black/5 dark:bg-white/[0.02] hover:bg-primary/5 hover:border-primary/50 transition-all group relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Sparkles className="w-10 h-10 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <div className="text-center relative z-10">
+                      <div className="font-bold text-foreground text-lg">Generate with AI</div>
+                      <div className="text-xs text-muted-foreground mt-1.5 font-medium">Auto-create MCQs</div>
+                    </div>
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {addMode === "ai" && (
+              <>
+                <DialogHeader className="mb-4">
+                  <DialogTitle className="text-2xl font-bold text-foreground flex items-center gap-2">
+                    <Button variant="ghost" size="sm" className="p-0 h-8 w-8 rounded-full" onClick={() => setAddMode("select")}>
+                      <ChevronLeft className="w-5 h-5" />
+                    </Button>
+                    Generate Questions with AI
+                  </DialogTitle>
+                  <p className="text-sm text-muted-foreground mt-1 ml-10">Automatically generate multiple choice questions tailored to your needs.</p>
+                </DialogHeader>
+                <div className="grid gap-6 mt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-1">Technology Stack</label>
+                      <input 
+                        value={aiFormData.stack}
+                        onChange={(e) => setAiFormData({ ...aiFormData, stack: e.target.value })}
+                        placeholder="E.g., Spring Boot"
+                        className="w-full rounded-xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-5 py-3.5 text-sm text-foreground shadow-inner transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-1">Topic</label>
+                      <input 
+                        value={aiFormData.topic}
+                        onChange={(e) => setAiFormData({ ...aiFormData, topic: e.target.value })}
+                        placeholder="E.g., Annotations"
+                        className="w-full rounded-xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-5 py-3.5 text-sm text-foreground shadow-inner transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-1">Difficulty</label>
+                      <select 
+                        value={aiFormData.difficulty}
+                        onChange={(e) => setAiFormData({ ...aiFormData, difficulty: e.target.value })}
+                        className="w-full rounded-xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-5 py-3.5 text-sm text-foreground shadow-inner transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 appearance-none"
+                      >
+                        <option value="Easy" className="bg-background text-foreground">Easy</option>
+                        <option value="Medium" className="bg-background text-foreground">Medium</option>
+                        <option value="Hard" className="bg-background text-foreground">Hard</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-1">Number of Questions</label>
+                      <input 
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={aiFormData.count}
+                        onChange={(e) => setAiFormData({ ...aiFormData, count: parseInt(e.target.value) || 1 })}
+                        className="w-full rounded-xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-5 py-3.5 text-sm text-foreground shadow-inner transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-border/30">
+                    <Button variant="ghost" onClick={() => setIsAddModalOpen(false)} className="rounded-xl font-bold py-6 px-6">Cancel</Button>
+                    <Button 
+                      onClick={handleGenerateAi} 
+                      disabled={isGenerating || !aiFormData.stack || !aiFormData.topic} 
+                      className="relative overflow-hidden rounded-xl font-bold bg-primary text-white hover:bg-primary/90 py-6 px-8 shadow-md transition-all"
+                    >
+                      {isGenerating && (
+                        <div className="absolute inset-0 w-full h-full animate-[shimmer_1.5s_infinite_linear] bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full" />
+                      )}
+                      <div className="relative z-10 flex items-center">
+                        {isGenerating ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Generating...</> : <><Sparkles className="w-5 h-5 mr-2" /> Generate Questions</>}
+                      </div>
+                    </Button>
+                  </div>
                 </div>
               </>
             )}
@@ -244,7 +378,7 @@ export default function MyQuestions() {
                       value={newQuestionData.stem}
                       onChange={(e) => setNewQuestionData({ ...newQuestionData, stem: e.target.value })}
                       placeholder="E.g., What is the purpose of Spring Boot Starters?"
-                      className="w-full min-h-[120px] rounded-2xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-5 py-4 text-sm text-foreground shadow-inner transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 resize-none custom-scrollbar"
+                      className="w-full min-h-[120px] rounded-2xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-5 py-4 text-sm text-foreground shadow-inner transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 resize-none no-scrollbar"
                     />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -314,100 +448,166 @@ export default function MyQuestions() {
             )}
           </DialogContent>
         </Dialog>
-
         {/* Edit Question Dialog */}
         <Dialog open={editFormData !== null} onOpenChange={(open) => !open && setEditFormData(null)}>
-          <DialogContent className="sm:max-w-2xl bg-background/95 backdrop-blur-3xl border border-border/50 shadow-2xl rounded-3xl p-8 max-h-[90vh] overflow-y-auto custom-scrollbar">
-            <DialogHeader className="mb-4">
-              <DialogTitle className="text-3xl font-extrabold text-foreground tracking-tight">Edit Question</DialogTitle>
-              <p className="text-sm text-muted-foreground font-medium">Update the stem, topics, and options below.</p>
+          <DialogContent className="sm:max-w-3xl bg-background/95 backdrop-blur-3xl border border-border/50 shadow-2xl rounded-3xl p-8 sm:p-10 max-h-[90vh] overflow-y-auto overflow-x-hidden no-scrollbar">
+            <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/10 rounded-full blur-3xl opacity-50 pointer-events-none" />
+            <DialogHeader className="mb-8 relative z-10 flex flex-col items-center text-center">
+              <DialogTitle className="text-4xl font-extrabold text-foreground tracking-tight flex items-center justify-center gap-4 w-full">
+                <div className="p-3 bg-primary/10 rounded-2xl border border-primary/20 shadow-inner">
+                  <Edit3 className="w-7 h-7 text-primary" />
+                </div>
+                <span className="bg-clip-text text-transparent bg-gradient-to-br from-foreground to-foreground/60">Edit Question</span>
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground font-medium mt-2">Update the stem, topics, and answer options.</p>
             </DialogHeader>
             {editFormData && (
-              <div className="grid gap-6">
+              <div className="grid gap-8 relative z-10">
+                {duplicateCheckResult && duplicateCheckResult.isDuplicate && (
+                  <div className="bg-red-500/10 border border-red-500/50 p-5 rounded-2xl text-red-700 dark:text-red-400 mb-2 shadow-sm">
+                    <h3 className="font-bold mb-2 flex items-center text-lg"><AlertTriangle className="w-5 h-5 mr-2" /> Duplicate Check Failed</h3>
+                    <p className="text-sm mb-4">A similarity match was detected with an existing question in the question bank for the same technology stack and topic based on question stem and option.</p>
+                    <div className="space-y-3">
+                      {duplicateCheckResult.similarQuestions.map((sq: any) => (
+                        <div key={sq.questionId} className="bg-background/80 p-4 rounded-xl text-sm border border-red-500/20 shadow-inner">
+                          <strong className="text-red-800 dark:text-red-300">Question ID {sq.questionId} - {sq.similarityPercentage}% similar</strong>
+                          <p className="mt-2 text-foreground/80">{sq.stem}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {duplicateCheckResult && !duplicateCheckResult.isDuplicate && (
+                  <div className="bg-green-500/10 border border-green-500/50 p-4 rounded-2xl text-green-700 dark:text-green-400 mb-2 flex items-center shadow-sm">
+                    <Sparkles className="w-5 h-5 mr-2" /> <span className="font-bold">Good to go!</span> <span className="ml-2">No significant duplicates found (Highest similarity: {Math.round(duplicateCheckResult.highestSimilarity * 100)}%).</span>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-1">Question Stem</label>
                   <textarea 
                     value={editFormData.stem}
-                    onChange={(e) => setEditFormData({ ...editFormData, stem: e.target.value })}
+                    onChange={(e) => { setEditFormData({ ...editFormData, stem: e.target.value }); setDuplicateCheckResult(null); }}
                     placeholder="E.g., What is the purpose of Spring Boot Starters?"
-                    className="w-full min-h-[120px] rounded-2xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-5 py-4 text-sm text-foreground shadow-inner transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 resize-none custom-scrollbar"
+                    className="w-full min-h-[140px] rounded-2xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-6 py-5 text-base text-foreground shadow-inner transition-all placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 resize-none no-scrollbar leading-relaxed"
                   />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-1">Tech Stack</label>
-                    <input 
-                      value={editFormData.stack}
-                      onChange={(e) => setEditFormData({ ...editFormData, stack: e.target.value })}
-                      placeholder="E.g., Spring Boot"
-                      className="w-full rounded-xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-5 py-3.5 text-sm text-foreground shadow-inner transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-                    />
+                    <div className="relative group">
+                      <Code className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                      <input 
+                        value={editFormData.stack}
+                        onChange={(e) => { setEditFormData({ ...editFormData, stack: e.target.value }); setDuplicateCheckResult(null); }}
+                        placeholder="E.g., Spring Boot"
+                        className="w-full rounded-xl border border-border/50 bg-black/5 dark:bg-white/[0.02] pl-11 pr-5 py-3.5 text-sm text-foreground shadow-inner transition-all placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-1">Topic</label>
-                    <input 
-                      value={editFormData.topic}
-                      onChange={(e) => setEditFormData({ ...editFormData, topic: e.target.value })}
-                      placeholder="E.g., Spring Boot Introduction"
-                      className="w-full rounded-xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-5 py-3.5 text-sm text-foreground shadow-inner transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-1">Difficulty</label>
-                  <select 
-                    value={editFormData.difficulty}
-                    onChange={(e) => setEditFormData({ ...editFormData, difficulty: e.target.value })}
-                    className="w-full rounded-xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-5 py-3.5 text-sm text-foreground shadow-inner transition-all focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 appearance-none"
-                  >
-                    <option value="Easy" className="bg-background text-foreground">Easy</option>
-                    <option value="Medium" className="bg-background text-foreground">Medium</option>
-                    <option value="Hard" className="bg-background text-foreground">Hard</option>
-                  </select>
-                </div>
-                
-                <div className="space-y-3 pt-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-1">Answer Options</label>
-                  {editFormData.options?.map((opt: string, i: number) => (
-                    <div key={i} className="flex items-center gap-4 group">
-                      <div 
-                        onClick={() => setEditFormData({ ...editFormData, correctOption: i })}
-                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer ${editFormData.correctOption === i ? 'border-primary bg-primary/10' : 'border-border group-hover:border-primary/50'}`}
-                      >
-                        {editFormData.correctOption === i && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
-                      </div>
+                    <div className="relative group">
+                      <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                       <input 
-                        value={opt}
-                        onChange={(e) => {
-                          const newOptions = [...editFormData.options];
-                          newOptions[i] = e.target.value;
-                          setEditFormData({ ...editFormData, options: newOptions });
-                        }}
-                        placeholder={`Option ${String.fromCharCode(65 + i)} text...`}
-                        className={`flex-1 rounded-xl border bg-black/5 dark:bg-white/[0.02] px-5 py-3 text-sm text-foreground transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 ${editFormData.correctOption === i ? 'border-primary/50 ring-1 ring-primary/20' : 'border-border/50'}`}
+                        value={editFormData.topic}
+                        onChange={(e) => { setEditFormData({ ...editFormData, topic: e.target.value }); setDuplicateCheckResult(null); }}
+                        placeholder="E.g., Spring Boot Intro"
+                        className="w-full rounded-xl border border-border/50 bg-black/5 dark:bg-white/[0.02] pl-11 pr-5 py-3.5 text-sm text-foreground shadow-inner transition-all placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50"
                       />
                     </div>
-                  ))}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-1">Difficulty</label>
+                    <div className="relative group">
+                      <Gauge className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors pointer-events-none" />
+                      <select 
+                        value={editFormData.difficulty}
+                        onChange={(e) => setEditFormData({ ...editFormData, difficulty: e.target.value })}
+                        className="w-full rounded-xl border border-border/50 bg-black/5 dark:bg-white/[0.02] pl-11 pr-5 py-3.5 text-sm text-foreground shadow-inner transition-all focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 appearance-none cursor-pointer"
+                      >
+                        <option value="Easy" className="bg-background text-foreground">Easy</option>
+                        <option value="Medium" className="bg-background text-foreground">Medium</option>
+                        <option value="Hard" className="bg-background text-foreground">Hard</option>
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <ChevronRight className="w-4 h-4 text-muted-foreground rotate-90" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-4 pt-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-1 flex items-center">
+                    Answer Options <span className="normal-case font-medium text-muted-foreground/60 ml-2 tracking-normal bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-md">Select the correct answer</span>
+                  </label>
+                  <div className="grid gap-3">
+                    {editFormData.options?.map((opt: string, i: number) => {
+                      const isCorrect = editFormData.correctOption === i;
+                      return (
+                        <div 
+                          key={i} 
+                          className={`relative flex items-center p-2 rounded-2xl border transition-all duration-300 group ${isCorrect ? 'border-primary bg-primary/5 shadow-[0_0_15px_rgba(var(--primary),0.08)] scale-[1.01]' : 'border-border/50 bg-black/5 dark:bg-white/[0.02] hover:border-primary/30'}`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setEditFormData({ ...editFormData, correctOption: i })}
+                            className="flex items-center justify-center w-12 h-12 shrink-0 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                          >
+                            {isCorrect ? (
+                              <CheckCircle2 className="w-7 h-7 text-primary fill-primary/20 drop-shadow-md" />
+                            ) : (
+                              <Circle className="w-6 h-6 text-muted-foreground/40 group-hover:text-primary/50 transition-colors" />
+                            )}
+                          </button>
+                          
+                          <div className="flex-1 relative flex items-center">
+                            <span className={`absolute left-0 text-[11px] font-extrabold w-6 text-center select-none ${isCorrect ? 'text-primary' : 'text-muted-foreground/30'}`}>
+                              {String.fromCharCode(65 + i)}
+                            </span>
+                            <input 
+                              value={opt}
+                              onChange={(e) => {
+                                const newOptions = [...editFormData.options];
+                                newOptions[i] = e.target.value;
+                                setEditFormData({ ...editFormData, options: newOptions });
+                                setDuplicateCheckResult(null);
+                              }}
+                              placeholder={`Enter option ${String.fromCharCode(65 + i)}...`}
+                              className="w-full bg-transparent border-none px-8 py-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-0 font-medium"
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
             )}
-            <div className="flex justify-between items-center mt-6 pt-6 border-t border-border/30">
-              <Button 
-                variant="ghost" 
-                onClick={() => {
-                  dispatch(deleteQuestion(editFormData.id));
-                  setEditFormData(null);
-                }} 
-                className="text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-xl font-bold py-6 px-6"
-              >
-                <Trash2 className="w-5 h-5 mr-2" /> Delete
-              </Button>
-              <div className="flex gap-3">
-                <Button variant="ghost" onClick={() => setEditFormData(null)} className="rounded-xl font-bold py-6 px-6">Cancel</Button>
-                <Button variant="secondary" onClick={() => handleSaveChanges("Draft")} className="rounded-xl font-bold py-6 px-8 transition-all">Save as Draft</Button>
-                <Button onClick={() => handleSaveChanges("Ready for Review")} className="rounded-xl font-bold bg-primary text-white hover:bg-primary/90 py-6 px-8 shadow-md hover:shadow-lg transition-all">Save & Review</Button>
+              <div className="flex flex-col sm:flex-row justify-between items-center mt-10 pt-6 border-t border-border/30 gap-4 relative z-10">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => {
+                    dispatch(deleteQuestion(editFormData.id));
+                    setEditFormData(null);
+                    setDuplicateCheckResult(null);
+                  }} 
+                  className="text-red-500 hover:text-white hover:bg-red-500 rounded-xl font-bold py-6 px-5 w-full sm:w-auto transition-all duration-300"
+                >
+                  <Trash2 className="w-5 h-5 mr-2" /> Delete
+                </Button>
+                <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto justify-end">
+                  <Button variant="ghost" onClick={handleManualDuplicateCheck} disabled={isCheckingDuplicate} className="rounded-xl font-bold py-6 px-5 border border-border/50 text-muted-foreground hover:text-foreground w-full sm:w-auto bg-black/5 dark:bg-white/[0.02] hover:bg-black/10 dark:hover:bg-white/10">
+                    {isCheckingDuplicate ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : "Duplicate Check"}
+                  </Button>
+                  <Button variant="secondary" onClick={() => handleSaveChanges("Draft")} className="rounded-xl font-bold py-6 px-6 transition-all w-full sm:w-auto border border-border/50 shadow-sm">Save as Draft</Button>
+                  <Button onClick={handleSaveAndReviewWithDuplicateCheck} disabled={isCheckingDuplicate} className="relative overflow-hidden rounded-xl font-bold bg-primary text-white hover:bg-primary/90 py-6 px-7 shadow-[0_4px_20px_rgba(var(--primary),0.25)] hover:shadow-[0_4px_25px_rgba(var(--primary),0.4)] transition-all flex items-center justify-center w-full sm:w-auto group border border-primary/20">
+                    <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite_linear]" />
+                    <span className="relative z-10 flex items-center drop-shadow-md">
+                      {isCheckingDuplicate ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Checking...</> : "Save & Send for Review"}
+                    </span>
+                  </Button>
+                </div>
               </div>
-            </div>
           </DialogContent>
         </Dialog>
       </div>
@@ -435,7 +635,7 @@ export default function MyQuestions() {
           className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden relative"
         >
           
-          <div className="overflow-auto max-h-[55vh] w-full custom-scrollbar relative">
+          <div className="overflow-auto max-h-[55vh] w-full no-scrollbar relative">
             <Table wrapperClassName="overflow-visible">
               <TableHeader className="bg-card/95 dark:bg-black/90 sticky top-0 z-20 backdrop-blur-xl shadow-sm border-b border-border/50">
                 <TableRow className="border-0 hover:bg-transparent">
@@ -526,7 +726,35 @@ export default function MyQuestions() {
                 ) : (
                   <>
                     <AnimatePresence mode="popLayout">
-                      {paginatedQuestions.map((q) => (
+                      {paginatedQuestions.map((q) => {
+                        const isUpdating = updatingIds.includes(q.id);
+                        if (isUpdating) {
+                          return (
+                            <TableRow key={`shimmer-${q.id}`} className="border-border/50 animate-pulse bg-black/5 dark:bg-white/5 pointer-events-none">
+                              <TableCell className="py-5 pl-6">
+                                <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-3/4 mb-2"></div>
+                                <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-1/2"></div>
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell py-5">
+                                <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-24"></div>
+                              </TableCell>
+                              <TableCell className="hidden xl:table-cell py-5">
+                                <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-32"></div>
+                              </TableCell>
+                              <TableCell className="hidden md:table-cell py-5">
+                                <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-16"></div>
+                              </TableCell>
+                              <TableCell className="py-5">
+                                <div className="h-6 bg-black/10 dark:bg-white/10 rounded-full w-24"></div>
+                              </TableCell>
+                              <TableCell className="text-right py-5 pr-6">
+                                <div className="h-8 bg-black/10 dark:bg-white/10 rounded-lg w-16 ml-auto"></div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
+                        
+                        return (
                         <motion.tr 
                           key={q.id}
                           layout
@@ -564,7 +792,7 @@ export default function MyQuestions() {
                             )}
                           </TableCell>
                         </motion.tr>
-                      ))}
+                      )})}
                     </AnimatePresence>
                     {filteredQuestions.length === 0 && (
                       <TableRow>

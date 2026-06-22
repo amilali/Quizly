@@ -38,6 +38,7 @@ export default function QuestionBank() {
   const parentRef = useRef<HTMLDivElement>(null)
   
   const questions = useSelector((state: RootState) => state.questions.list)
+  const updatingIds = useSelector((state: RootState) => state.questions.updatingIds) || []
   const { role } = useSelector((state: RootState) => state.auth)
   
   const [activeTab, setActiveTab] = useState("All")
@@ -170,6 +171,31 @@ export default function QuestionBank() {
               <AnimatePresence mode="popLayout">
                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                   const q = filteredQuestions[virtualRow.index];
+                  const isUpdating = updatingIds.includes(q.id);
+                  if (isUpdating) {
+                    return (
+                      <TableRow key={`shimmer-${q.id}`} className="border-border/50 animate-pulse bg-black/5 dark:bg-white/5 pointer-events-none">
+                        <TableCell className="py-5 pl-6">
+                          <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-3/4 mb-2"></div>
+                          <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-1/2"></div>
+                        </TableCell>
+                        <TableCell className="py-5">
+                          <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-24"></div>
+                        </TableCell>
+                        <TableCell className="py-5">
+                          <div className="h-6 bg-black/10 dark:bg-white/10 rounded-full w-24"></div>
+                        </TableCell>
+                        <TableCell className="py-5">
+                          <div className="h-4 bg-black/10 dark:bg-white/10 rounded w-20"></div>
+                        </TableCell>
+                        <TableCell className="text-right py-5 pr-6">
+                          <div className="flex justify-end gap-2">
+                            <div className="h-8 bg-black/10 dark:bg-white/10 rounded-lg w-16"></div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
                   return (
                   <motion.tr 
                     key={q.id}
