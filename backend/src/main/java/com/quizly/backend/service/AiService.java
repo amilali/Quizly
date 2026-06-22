@@ -106,35 +106,46 @@ public class AiService {
         }
         
         try {
-            // Attempt real Spring AI Azure OpenAI generation
-            String systemPrompt = String.format("Generate a %s difficulty multiple choice question about %s in %s. %sReturn ONLY raw JSON without any markdown formatting or backticks in this format: {\"stem\": \"Question text\", \"options\": [\"Option 1\", \"Option 2\", \"Option 3\", \"Option 4\"], \"correctOption\": 0}", difficulty, topic, stack, avoidInstruction);
-            String response = chatModel.call(new Prompt(systemPrompt)).getResult().getOutput().getText();
+            org.springframework.ai.converter.BeanOutputConverter<com.quizly.backend.dto.AiQuestionResponse> converter = 
+                new org.springframework.ai.converter.BeanOutputConverter<>(com.quizly.backend.dto.AiQuestionResponse.class);
             
-            // Clean up the response if it has markdown json block
-            if (response.startsWith("```json")) {
-                response = response.substring(7);
-            }
-            if (response.startsWith("```")) {
-                response = response.substring(3);
-            }
-            if (response.endsWith("```")) {
-                response = response.substring(0, response.length() - 3);
-            }
-            response = response.trim();
+            String promptText = """
+                Generate a {difficulty} difficulty multiple choice question about {topic} in {stack}.
+                {avoidInstruction}
+                
+                GUARDRAILS:
+                1. Ensure the question is factually correct and unambiguous.
+                2. Provide exactly 4 distinct and plausible options.
+                3. Do NOT use generic options like 'Option A', 'Option B', or 'None of the above'.
+                4. Specify the correctOption as a 0-based index.
+                
+                {format}
+                """;
+                
+            org.springframework.ai.chat.prompt.PromptTemplate promptTemplate = new org.springframework.ai.chat.prompt.PromptTemplate(promptText);
+            org.springframework.ai.chat.prompt.Prompt prompt = promptTemplate.create(Map.of(
+                "difficulty", difficulty,
+                "topic", topic,
+                "stack", stack,
+                "avoidInstruction", avoidInstruction,
+                "format", converter.getFormat()
+            ));
             
-            com.fasterxml.jackson.databind.JsonNode jsonNode = objectMapper.readTree(response);
-            q.setStem(jsonNode.get("stem").asText());
+            String response = chatModel.call(prompt).getResult().getOutput().getContent();
+            com.quizly.backend.dto.AiQuestionResponse aiQuestion = converter.convert(response);
             
-            List<String> options = new ArrayList<>();
-            for (com.fasterxml.jackson.databind.JsonNode node : jsonNode.get("options")) {
-                options.add(node.asText());
+            if (aiQuestion != null) {
+                q.setStem(aiQuestion.getStem());
+                q.setOptions(aiQuestion.getOptions());
+                q.setCorrectOption(aiQuestion.getCorrectOption());
+            } else {
+                throw new RuntimeException("AI response parsed to null");
             }
-            q.setOptions(options);
-            q.setCorrectOption(jsonNode.get("correctOption").asInt());
             
         } catch (Exception e) {
             // Fallback to mock generation if API key is placeholder or call fails
             System.err.println("AI Generation failed: " + e.getMessage());
+            e.printStackTrace();
             q.setStem("Generated " + difficulty + " question about " + topic + " in " + stack + " " + System.currentTimeMillis());
             q.setOptions(Arrays.asList("Option A", "Option B", "Option C", "Option D"));
             q.setCorrectOption(0);
