@@ -19,9 +19,12 @@ public class GameSession {
     private Map<String, Boolean> answeredThisRound;
     // Time when current question was sent (epoch millis)
     private long questionStartTime;
+    private long timeLimitMs;
+    private boolean eventBased;
 
-    public GameSession(String pin, String hostId, List<Long> questionIds) {
+    public GameSession(String pin, String hostId, List<Long> questionIds, long timeLimitMs) {
         this.pin = pin;
+        this.timeLimitMs = timeLimitMs;
         this.hostId = hostId;
         this.questionIds = questionIds;
         this.status = Status.WAITING;
@@ -41,6 +44,9 @@ public class GameSession {
     public Map<String, Boolean> getAnsweredThisRound() { return answeredThisRound; }
     public long getQuestionStartTime() { return questionStartTime; }
     public void setQuestionStartTime(long questionStartTime) { this.questionStartTime = questionStartTime; }
+    public long getTimeLimitMs() { return timeLimitMs; }
+    public boolean isEventBased() { return eventBased; }
+    public void setEventBased(boolean eventBased) { this.eventBased = eventBased; }
 
     public void addPlayer(String playerName) {
         playerScores.putIfAbsent(playerName, 0);

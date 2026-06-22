@@ -5,6 +5,8 @@ import PendingReviews from "./pages/PendingReviews"
 import QuestionBank from "./pages/QuestionBank"
 import QuizGame from "./pages/QuizGame"
 import PublicGameJoin from "./pages/PublicGameJoin"
+import QuizEventDashboard from "./pages/QuizEventDashboard"
+import QuizEventDetail from "./pages/QuizEventDetail"
 import { motion, AnimatePresence } from "framer-motion"
 import { ThemeProvider } from "./components/theme-provider"
 import { useSelector } from "react-redux"
@@ -54,6 +56,8 @@ function App() {
                         <Route path="/my-questions" element={<MyQuestions />} />
                         <Route path="/pending-reviews" element={<PendingReviews />} />
                         <Route path="/question-bank" element={<QuestionBank />} />
+                        <Route path="/events" element={<QuizEventDashboard />} />
+                        <Route path="/events/:eventId" element={<QuizEventDetail />} />
                         <Route path="/quiz-game" element={<QuizGame />} />
                       </Routes>
                     </motion.div>

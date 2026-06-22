@@ -32,7 +32,10 @@ public class GameController {
             int questionCount = request.containsKey("questionCount")
                     ? ((Number) request.get("questionCount")).intValue()
                     : 10;
-            Map<String, Object> result = gameService.createGame(hostId, stack, topic, questionCount);
+            long timeLimitMs = request.containsKey("timeLimitSeconds")
+                    ? ((Number) request.get("timeLimitSeconds")).longValue() * 1000L
+                    : 30000L;
+            Map<String, Object> result = gameService.createGame(hostId, stack, topic, questionCount, timeLimitMs);
             return ResponseEntity.ok(result);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

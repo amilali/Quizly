@@ -5,9 +5,10 @@ interface UserAvatarProps {
   role?: string;
   className?: string;
   avatarSize?: "sm" | "md" | "lg";
+  hideDetails?: boolean;
 }
 
-export function UserAvatar({ name, role, className, avatarSize = "md" }: UserAvatarProps) {
+export function UserAvatar({ name, role, className, avatarSize = "md", hideDetails = false }: UserAvatarProps) {
   const getInitials = (name: string) => {
     const parts = name.trim().split(/\s+/);
     if (parts.length === 0 || !parts[0]) return '';
@@ -37,8 +38,8 @@ export function UserAvatar({ name, role, className, avatarSize = "md" }: UserAva
       >
         {getInitials(name)}
       </div>
-      {(name || role) && (
-        <div className="flex flex-col justify-center">
+      {!hideDetails && (name || role) && (
+        <div className="flex flex-col justify-center overflow-hidden whitespace-nowrap">
           {name && <span className={cn("font-extrabold text-foreground leading-tight tracking-tight", textClasses[avatarSize].name)}>{name}</span>}
           {role && <span className={cn("text-muted-foreground font-semibold leading-tight mt-0.5", textClasses[avatarSize].role)}>{role}</span>}
         </div>

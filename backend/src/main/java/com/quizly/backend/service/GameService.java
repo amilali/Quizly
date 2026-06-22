@@ -29,19 +29,20 @@ public class GameService {
     // Shared scheduler thread pool
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(4);
 
-    // Time allowed per question in milliseconds (30 seconds)
-    private static final long QUESTION_TIME_MS = 30_000;
     // Delay after reveal before auto-advancing to next question (ms)
     private static final long AUTO_NEXT_DELAY_MS = 5_000;
     // Max points per question
     private static final int MAX_POINTS = 1000;
 
-    public GameService(QuestionRepository questionRepository, SimpMessagingTemplate messagingTemplate) {
+    private final com.quizly.backend.repository.EventQuestionRepository eventQuestionRepository;
+
+    public GameService(QuestionRepository questionRepository, com.quizly.backend.repository.EventQuestionRepository eventQuestionRepository, SimpMessagingTemplate messagingTemplate) {
         this.questionRepository = questionRepository;
+        this.eventQuestionRepository = eventQuestionRepository;
         this.messagingTemplate = messagingTemplate;
     }
 
-    public Map<String, Object> createGame(String hostId, String stack, String topic, int questionCount) {
+    public Map<String, Object> createGame(String hostId, String stack, String topic, int questionCount, long timeLimitMs) {
         // Fetch approved questions, filter by stack/topic if provided
         List<Question> allApproved = questionRepository.findAll().stream()
                 .filter(q -> "Approved".equalsIgnoreCase(q.getStatus()))
@@ -60,7 +61,7 @@ public class GameService {
                 .collect(Collectors.toList());
 
         String pin = generatePin();
-        GameSession session = new GameSession(pin, hostId, questionIds);
+        GameSession session = new GameSession(pin, hostId, questionIds, timeLimitMs);
         // Host is NOT added as a player — they manage the game, not participate
 
         activeSessions.put(pin, session);
@@ -70,6 +71,22 @@ public class GameService {
         response.put("totalQuestions", questionIds.size());
         response.put("hostId", hostId);
         return response;
+    }
+
+    public void initSessionFromEvent(com.quizly.backend.model.QuizEvent event) {
+        List<Long> questionIds = event.getQuestions().stream()
+                .map(com.quizly.backend.model.EventQuestion::getId)
+                .collect(Collectors.toList());
+
+        GameSession session = new GameSession(event.getPin(), event.getHostId(), questionIds, event.getTimeLimitSeconds() * 1000L);
+        session.setEventBased(true);
+        activeSessions.put(event.getPin(), session);
+    }
+
+    public void endSession(String pin) {
+        activeSessions.remove(pin);
+        ScheduledFuture<?> old = scheduledReveal.remove(pin);
+        if (old != null) old.cancel(false);
     }
 
     public Map<String, Object> joinGame(String pin, String playerName) {
@@ -107,17 +124,22 @@ public class GameService {
         if (Boolean.TRUE.equals(alreadyAnswered)) return;
 
         // Validate answer server-side
-        Optional<Question> questionOpt = questionRepository.findById(questionId);
-        if (questionOpt.isEmpty()) return;
-
-        Question question = questionOpt.get();
-        int correctIndex = getCorrectOptionIndex(question.getCorrectAnswer());
+        int correctIndex;
+        if (session.isEventBased()) {
+            Optional<com.quizly.backend.model.EventQuestion> eqOpt = eventQuestionRepository.findById(questionId);
+            if (eqOpt.isEmpty()) return;
+            correctIndex = getCorrectOptionIndex(eqOpt.get().getCorrectAnswer());
+        } else {
+            Optional<Question> questionOpt = questionRepository.findById(questionId);
+            if (questionOpt.isEmpty()) return;
+            correctIndex = getCorrectOptionIndex(questionOpt.get().getCorrectAnswer());
+        }
         boolean isCorrect = selectedOption == correctIndex;
 
         int pointsAwarded = 0;
         if (isCorrect) {
             long elapsed = System.currentTimeMillis() - session.getQuestionStartTime();
-            double timeRatio = Math.max(0, 1.0 - (double) elapsed / QUESTION_TIME_MS);
+            double timeRatio = Math.max(0, 1.0 - (double) elapsed / session.getTimeLimitMs());
             pointsAwarded = (int) (MAX_POINTS * (0.5 + 0.5 * timeRatio)); // 500-1000 pts
         }
 
@@ -198,12 +220,21 @@ public class GameService {
         Long questionId = session.getCurrentQuestionId();
         if (questionId == null) return;
 
-        questionRepository.findById(questionId).ifPresent(q -> {
-            Map<String, Object> payload = new HashMap<>();
-            payload.put("type", "SHOW_ANSWER");
-            payload.put("correctOption", getCorrectOptionIndex(q.getCorrectAnswer()));
-            messagingTemplate.convertAndSend("/topic/game/" + pin + "/events", payload);
-        });
+        if (session.isEventBased()) {
+            eventQuestionRepository.findById(questionId).ifPresent(q -> {
+                Map<String, Object> payload = new HashMap<>();
+                payload.put("type", "SHOW_ANSWER");
+                payload.put("correctOption", getCorrectOptionIndex(q.getCorrectAnswer()));
+                messagingTemplate.convertAndSend("/topic/game/" + pin + "/events", payload);
+            });
+        } else {
+            questionRepository.findById(questionId).ifPresent(q -> {
+                Map<String, Object> payload = new HashMap<>();
+                payload.put("type", "SHOW_ANSWER");
+                payload.put("correctOption", getCorrectOptionIndex(q.getCorrectAnswer()));
+                messagingTemplate.convertAndSend("/topic/game/" + pin + "/events", payload);
+            });
+        }
         broadcastLeaderboard(session);
 
         // Auto-advance to next question after AUTO_NEXT_DELAY_MS
@@ -236,39 +267,59 @@ public class GameService {
         Long questionId = session.getCurrentQuestionId();
         if (questionId == null) return;
 
-        questionRepository.findById(questionId).ifPresent(q -> {
+        Runnable sendQuestion = () -> {
             session.setQuestionStartTime(System.currentTimeMillis());
+            
             Map<String, Object> payload = new HashMap<>();
-            payload.put("type", "QUESTION");
-            payload.put("questionId", q.getId());
-            payload.put("stem", q.getStem());
-            // Send options array but NO correctOption - validation is server-side only
-            payload.put("options", List.of(
-                    q.getOptionA() != null ? q.getOptionA() : "",
-                    q.getOptionB() != null ? q.getOptionB() : "",
-                    q.getOptionC() != null ? q.getOptionC() : "",
-                    q.getOptionD() != null ? q.getOptionD() : ""
-            ));
+            if (session.isEventBased()) {
+                com.quizly.backend.model.EventQuestion q = eventQuestionRepository.findById(questionId).orElse(null);
+                if (q == null) return;
+                payload.put("type", "QUESTION");
+                payload.put("questionId", q.getId());
+                payload.put("stem", q.getStem());
+                payload.put("options", List.of(
+                        q.getOptionA() != null ? q.getOptionA() : "",
+                        q.getOptionB() != null ? q.getOptionB() : "",
+                        q.getOptionC() != null ? q.getOptionC() : "",
+                        q.getOptionD() != null ? q.getOptionD() : ""
+                ));
+                payload.put("timeLimitMs", q.getTimeLimitSeconds() * 1000L);
+                payload.put("stack", q.getQuizEvent().getName());
+            } else {
+                Question q = questionRepository.findById(questionId).orElse(null);
+                if (q == null) return;
+                payload.put("type", "QUESTION");
+                payload.put("questionId", q.getId());
+                payload.put("stem", q.getStem());
+                payload.put("options", List.of(
+                        q.getOptionA() != null ? q.getOptionA() : "",
+                        q.getOptionB() != null ? q.getOptionB() : "",
+                        q.getOptionC() != null ? q.getOptionC() : "",
+                        q.getOptionD() != null ? q.getOptionD() : ""
+                ));
+                payload.put("timeLimitMs", session.getTimeLimitMs());
+                payload.put("stack", q.getStack());
+                payload.put("topic", q.getTopic());
+                payload.put("difficulty", q.getDifficulty());
+            }
+
             payload.put("questionIndex", session.getQuestionIndex());
             payload.put("totalQuestions", session.getTotalQuestions());
-            payload.put("timeLimitMs", QUESTION_TIME_MS);
-            payload.put("stack", q.getStack());
-            payload.put("topic", q.getTopic());
-            payload.put("difficulty", q.getDifficulty());
+            
             messagingTemplate.convertAndSend("/topic/game/" + session.getPin() + "/events", payload);
 
-            // Cancel any previous auto-reveal for this pin
             ScheduledFuture<?> old = scheduledReveal.remove(session.getPin());
             if (old != null) old.cancel(false);
 
-            // Schedule auto-reveal after the question time limit
             String pin = session.getPin();
+            long delay = payload.containsKey("timeLimitMs") ? ((Number)payload.get("timeLimitMs")).longValue() : session.getTimeLimitMs();
             ScheduledFuture<?> future = scheduler.schedule(
                     () -> { try { doShowAnswer(getSession(pin)); } catch (Exception ignored) {} },
-                    QUESTION_TIME_MS, TimeUnit.MILLISECONDS
+                    delay, TimeUnit.MILLISECONDS
             );
             scheduledReveal.put(pin, future);
-        });
+        };
+        sendQuestion.run();
     }
 
     private void broadcastLeaderboard(GameSession session) {

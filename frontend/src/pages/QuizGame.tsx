@@ -1,13 +1,38 @@
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useLocation, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { useSelector } from "react-redux"
 import type { RootState } from "@/store"
 import { useGameSocket } from "@/hooks/useGameSocket"
 import { Button } from "@/components/ui/button"
 import {
-  Gamepad2, Trophy, Users, Play, ChevronRight, Check, X,
-  Clock, Star, Crown, Zap, ArrowRight, Loader2, Copy, CheckCheck
+  MonitorPlay, Trophy, Users, Play, ChevronRight, Check, X,
+  Clock, Crown, Zap,
+  Database, FileQuestion, ClipboardCheck, ArrowLeft, Star, Loader2
 } from "lucide-react"
+import { QRCodeSVG } from "qrcode.react"
+
+// ─── Constants & Helpers ────────────────────────────────────────────────────────
+const EMOJIS = [
+  "🦊", "🐼", "🦁", "🐯", "🐨", "🐸", "🐰", "🐙", "🐵", "🦄", 
+  "🦉", "🐧", "🦖", "🦋", "🐞", "🐢", "🐬", "🦍", "🐕", "🐈", 
+  "🤖", "👾", "🧱", "🧩", "👽", "👷", "👻", "🤠", "😎", "🤓", 
+  "🐱", "🐶", "🐭", "🐹", "🐻", "🐮", "🐷", "🐒", "🐔", "🐦", 
+  "🐤", "🐺", "🐗", "🐴", "🐝", "🐛", "🐌", "🦀", "🐠", "🐡", 
+  "🦈", "🐊", "🐅", "🐆", "🦓", "🐘", "🦏", "🐪", "🦒", "🦘"
+]
+const getEmoji = (name: string) => {
+  const parts = name.split(" ");
+  if (EMOJIS.includes(parts[0])) return parts[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return EMOJIS[Math.abs(hash) % EMOJIS.length];
+}
+const getDisplayName = (name: string) => {
+  const parts = name.split(" ");
+  if (EMOJIS.includes(parts[0])) return parts.slice(1).join(" ");
+  return name;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface LeaderboardEntry { playerName: string; score: number }
@@ -35,6 +60,8 @@ type Phase = "home" | "lobby_host" | "lobby_player" | "question" | "answer_revea
 
 export default function QuizGame() {
   const { userName } = useSelector((state: RootState) => state.auth)
+  const location = useLocation()
+  const navigate = useNavigate()
 
   // ─── Game state ─────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>("home")
@@ -47,12 +74,12 @@ export default function QuizGame() {
   const [answerResult, setAnswerResult] = useState<{ isCorrect: boolean; pointsAwarded: number; correctOption: number; totalScore: number } | null>(null)
   const [timeLeft, setTimeLeft] = useState(30)
   const [correctOption, setCorrectOption] = useState<number | null>(null)
-  const [pinCopied, setPinCopied] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
   // Create game form
-  const [createForm, setCreateForm] = useState({ stack: "", topic: "", questionCount: 10 })
+  const [createForm, setCreateForm] = useState({ stack: "", topic: "", questionCount: 10, timeLimitSeconds: 30 })
+  const [, setPinCopied] = useState(false)
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -83,6 +110,12 @@ export default function QuizGame() {
         break
       case "ENDED":
         setPhase("final")
+        // Clean up any session active flags so the dashboard resets
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('session_active_')) {
+            localStorage.removeItem(key)
+          }
+        })
         break
     }
   }, [])
@@ -104,6 +137,18 @@ export default function QuizGame() {
   const clearTimer = () => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
   }
+
+  useEffect(() => {
+    if (location.state?.pin && location.state?.host) {
+      setPin(location.state.pin)
+      setIsHost(true)
+      setPhase("lobby_host")
+      // Clear state to avoid re-triggering if component unmounts/remounts
+      window.history.replaceState({}, '')
+    } else {
+      navigate("/events", { replace: true })
+    }
+  }, [location.state, navigate])
 
   useEffect(() => {
     if (phase === "question" && currentQuestion) {
@@ -189,94 +234,148 @@ export default function QuizGame() {
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-        <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">Quiz Game</h2>
-        <p className="text-muted-foreground mt-2 font-medium">Live multiplayer Kahoot-style quiz from your question bank.</p>
+      {/* ── HEADER ── */}
+      {phase === "home" && (
+        <header className="mb-8">
+          <h1 className="text-4xl font-black tracking-tight text-foreground">Live Assessment</h1>
+          <p className="text-muted-foreground mt-2 font-medium">Host real-time interactive assessments from your question bank.</p>
+        </header>
+      )}
       </motion.div>
 
       <AnimatePresence mode="wait">
 
         {/* ── HOME ── */}
         {phase === "home" && (
-          <motion.div key="home" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="grid md:grid-cols-2 gap-6 max-w-3xl">
-
+          <motion.div key="home" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="max-w-2xl">
             {/* Create Game */}
-            <div className="p-8 rounded-3xl border border-border/50 bg-card/60 backdrop-blur-xl space-y-5 shadow-xl">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-3 bg-primary/10 rounded-2xl"><Gamepad2 className="w-6 h-6 text-primary" /></div>
-                <div><div className="font-bold text-lg text-foreground">Host a Game</div><div className="text-xs text-muted-foreground">Create a live quiz session</div></div>
-              </div>
-              <div className="space-y-3">
-                <input value={createForm.stack} onChange={e => setCreateForm(f => ({ ...f, stack: e.target.value }))} placeholder="Tech Stack (optional, e.g. Spring Boot)" className="w-full rounded-xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-                <input value={createForm.topic} onChange={e => setCreateForm(f => ({ ...f, topic: e.target.value }))} placeholder="Topic (optional)" className="w-full rounded-xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-                <div className="flex items-center gap-3">
-                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground whitespace-nowrap">Questions</label>
-                  <input type="number" min={1} max={30} value={createForm.questionCount} onChange={e => setCreateForm(f => ({ ...f, questionCount: parseInt(e.target.value) || 10 }))} className="w-full rounded-xl border border-border/50 bg-black/5 dark:bg-white/[0.02] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-card shadow-2xl space-y-0">
+              <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent"></div>
+              <div className="absolute -top-48 -right-48 w-96 h-96 bg-primary/20 rounded-full blur-[100px] pointer-events-none"></div>
+              
+              <div className="p-8 sm:p-10 relative z-10 space-y-8">
+                <div className="flex items-center gap-4 border-b border-border/50 pb-6">
+                  <div className="p-3 bg-gradient-to-br from-primary/20 to-primary/5 rounded-xl border border-primary/20 shadow-[0_0_15px_rgba(var(--primary),0.2)]"><MonitorPlay className="w-6 h-6 text-primary" /></div>
+                  <div><div className="font-bold text-2xl text-foreground tracking-tight">Assessment Configuration</div><div className="text-sm text-muted-foreground mt-1">Configure parameters for your live session</div></div>
                 </div>
-              </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button onClick={handleCreateGame} disabled={isLoading} className="w-full rounded-xl py-5 font-bold text-white bg-primary hover:bg-primary/90">
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />} Create Game
-              </Button>
-            </div>
-
-            {/* Join a Game — link to public /play page */}
-            <div className="p-8 rounded-3xl border border-border/50 bg-card/60 backdrop-blur-xl space-y-5 shadow-xl flex flex-col items-center justify-center text-center gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-purple-500/10 rounded-2xl"><Users className="w-6 h-6 text-purple-500" /></div>
-                <div>
-                  <div className="font-bold text-lg text-foreground">Join a Game</div>
-                  <div className="text-xs text-muted-foreground">Players join from their devices</div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2"><Database className="w-3 h-3"/> Tech Stack</label>
+                    <input value={createForm.stack} onChange={e => setCreateForm(f => ({ ...f, stack: e.target.value }))} placeholder="Optional (e.g. Spring Boot)" className="w-full rounded-xl border border-white/10 bg-black/20 backdrop-blur-sm px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-muted-foreground/50" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2"><FileQuestion className="w-3 h-3"/> Topic</label>
+                    <input value={createForm.topic} onChange={e => setCreateForm(f => ({ ...f, topic: e.target.value }))} placeholder="Optional" className="w-full rounded-xl border border-white/10 bg-black/20 backdrop-blur-sm px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-muted-foreground/50" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2"><ClipboardCheck className="w-3 h-3"/> Question Count</label>
+                    <input type="number" min={1} max={50} value={createForm.questionCount} onChange={e => setCreateForm(f => ({ ...f, questionCount: parseInt(e.target.value) || 10 }))} className="w-full rounded-xl border border-white/10 bg-black/20 backdrop-blur-sm px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2"><Clock className="w-3 h-3"/> Time Per Question</label>
+                    <select value={createForm.timeLimitSeconds} onChange={e => setCreateForm(f => ({ ...f, timeLimitSeconds: parseInt(e.target.value) || 30 }))} className="w-full rounded-xl border border-white/10 bg-black/20 backdrop-blur-sm px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all appearance-none text-foreground [&>option]:text-black">
+                      <option value="15">15 seconds</option>
+                      <option value="30">30 seconds</option>
+                      <option value="45">45 seconds</option>
+                      <option value="60">60 seconds</option>
+                      <option value="90">90 seconds</option>
+                    </select>
+                  </div>
                 </div>
+                
+                {error && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-500 font-medium flex items-center gap-2">
+                    <X className="w-4 h-4 shrink-0" /> {error}
+                  </motion.div>
+                )}
+                
+                <Button onClick={handleCreateGame} disabled={isLoading} className="w-full rounded-xl py-6 text-base font-bold bg-primary hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(var(--primary),0.3)] hover:shadow-[0_0_30px_rgba(var(--primary),0.5)] active:scale-[0.98]">
+                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Play className="w-5 h-5 mr-2 fill-current" />} Initialize Assessment Session
+                </Button>
               </div>
-              <p className="text-sm text-muted-foreground max-w-[200px] leading-relaxed">
-                Share this link with players — no account needed
-              </p>
-              <a
-                href="/play"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-white bg-purple-600 hover:bg-purple-700 transition-all shadow-lg shadow-purple-500/20 text-sm"
-              >
-                <ArrowRight className="w-4 h-4" />
-                Open Player Join Page
-              </a>
-              <p className="text-xs text-muted-foreground/60 font-mono">/play</p>
             </div>
           </motion.div>
         )}
 
         {/* ── HOST LOBBY ── */}
         {phase === "lobby_host" && (
-          <motion.div key="lobby_host" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="max-w-2xl space-y-6">
-            <div className="p-8 rounded-3xl border border-primary/30 bg-primary/5 backdrop-blur-xl text-center space-y-3 shadow-2xl">
-              <p className="text-muted-foreground text-sm font-medium uppercase tracking-widest">Game PIN</p>
-              <div className="flex items-center justify-center gap-4">
-                <span className="text-6xl font-black tracking-[0.2em] text-primary font-mono">{pin}</span>
-                <Button variant="ghost" size="sm" onClick={handleCopyPin} className="rounded-xl">
-                  {pinCopied ? <CheckCheck className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
-                </Button>
+          <motion.div key="lobby_host" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full max-w-5xl mx-auto flex flex-col h-full">
+            
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-start md:items-center justify-between gap-4 mb-4 md:mb-6 shrink-0">
+              <div>
+                <button onClick={() => navigate("/events")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-3 md:mb-4">
+                  <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+                </button>
+                <h1 className="text-3xl md:text-4xl font-black text-foreground">{location.state?.eventName || "Live Assessment"}</h1>
+                <p className="text-muted-foreground mt-1 font-medium text-sm md:text-base">Lobby — waiting for participants</p>
               </div>
-              <p className="text-xs text-muted-foreground">Share this PIN with players</p>
-            </div>
-            <div className="p-6 rounded-3xl border border-border/50 bg-card/60 backdrop-blur-xl">
-              <div className="flex items-center gap-2 mb-4">
-                <Users className="w-4 h-4 text-primary" />
-                <span className="font-bold text-sm uppercase tracking-wider text-muted-foreground">Players Waiting ({players.length})</span>
-              </div>
-              <div className="flex flex-wrap gap-2 min-h-[60px]">
-                <AnimatePresence>
-                  {players.map(p => (
-                    <motion.div key={p} initial={{ scale: 0 }} animate={{ scale: 1 }} className="px-4 py-2 rounded-full bg-primary/10 text-primary font-bold text-sm border border-primary/20">
-                      {p}
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-                {players.length === 0 && <p className="text-muted-foreground text-sm italic">Waiting for players to join...</p>}
+              <div className="bg-[#e6f4ea] text-[#137333] font-bold px-4 py-2 rounded-full flex items-center gap-2 shadow-sm">
+                <div className="w-2 h-2 bg-[#137333] rounded-full animate-pulse" />
+                {players.length} participant{players.length !== 1 && 's'}
               </div>
             </div>
-            <Button onClick={handleStartGame} disabled={players.length < 1} className="w-full rounded-xl py-6 font-bold text-white bg-green-600 hover:bg-green-700 text-lg shadow-lg shadow-green-500/20">
-              <Play className="w-5 h-5 mr-2" /> Start Game ({players.length} player{players.length !== 1 ? "s" : ""})
-            </Button>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 flex-1 min-h-0">
+              
+              {/* Left Column */}
+              <div className="lg:col-span-4 flex flex-col gap-4 h-full">
+                
+                {/* JOIN CODE */}
+                <div className="bg-card border border-border/50 rounded-2xl p-4 md:p-5 text-center shadow-sm shrink-0">
+                  <p className="text-xs font-bold text-muted-foreground tracking-wider mb-2 uppercase">Join Code</p>
+                  <div 
+                    onClick={handleCopyPin}
+                    className="bg-primary/10 text-primary font-mono font-black text-4xl tracking-widest py-2 px-2 rounded w-full mb-2 flex justify-center items-center cursor-pointer hover:bg-primary/20 transition-colors select-all"
+                  >
+                    {pin}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Go to <span className="font-semibold text-foreground">{window.location.origin}/join</span></p>
+                </div>
+
+                {/* SCAN TO JOIN */}
+                <div className="bg-card border border-border/50 rounded-2xl p-4 md:p-5 text-center shadow-sm shrink-0 flex flex-col items-center">
+                  <p className="text-xs font-bold text-muted-foreground tracking-wider mb-2 uppercase w-full">Scan to Join</p>
+                  <div className="flex justify-center mb-2 bg-white p-2 rounded-xl">
+                    <QRCodeSVG value={`${window.location.origin}/play?pin=${pin}`} size={120} />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground break-all px-2 w-full">{`${window.location.origin}/play?pin=${pin}`}</p>
+                </div>
+
+                {/* START BUTTON */}
+                <button 
+                  onClick={handleStartGame} 
+                  disabled={players.length < 1} 
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-lg py-3 md:py-4 rounded-xl transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed mt-auto"
+                >
+                  Start Quiz
+                </button>
+              </div>
+
+              {/* Right Column */}
+              <div className="lg:col-span-8 h-full min-h-[300px]">
+                <div className="bg-card border border-border/50 rounded-2xl p-4 md:p-6 shadow-sm flex flex-col h-full">
+                  <p className="text-sm font-bold text-muted-foreground tracking-wider mb-4 uppercase shrink-0">Participants ({players.length})</p>
+                  <div className="flex flex-wrap gap-3 overflow-y-auto content-start flex-1 custom-scrollbar pr-2">
+                    <AnimatePresence>
+                      {players.map(p => (
+                        <motion.div key={p} initial={{ scale: 0 }} animate={{ scale: 1 }} className="px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-secondary text-secondary-foreground font-semibold text-sm border border-border/50 flex items-center gap-2 shadow-sm h-fit">
+                          <span className="text-base md:text-lg">{getEmoji(p)}</span>
+                          {getDisplayName(p)}
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                    {players.length === 0 && (
+                      <div className="w-full h-full flex flex-col items-center justify-center opacity-50 my-auto">
+                        <Users className="w-10 h-10 md:w-12 md:h-12 mb-4 text-muted-foreground" />
+                        <p className="text-muted-foreground italic text-base md:text-lg">Waiting for participants...</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -449,7 +548,7 @@ export default function QuizGame() {
 
             {/* Podium for top 3 */}
             {leaderboard.length >= 1 && (
-              <div className="flex items-end justify-center gap-3 h-36">
+              <div className="flex items-end justify-center gap-3 pt-6 pb-4">
                 {leaderboard.length >= 2 && (
                   <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} className="flex flex-col items-center">
                     <div className="w-14 h-14 rounded-full bg-gray-400/20 border-2 border-gray-400 flex items-center justify-center text-xl font-black text-gray-400 mb-2">2</div>
@@ -480,11 +579,11 @@ export default function QuizGame() {
             )}
 
             {/* Full list */}
-            {leaderboard.length > 3 && (
-              <div className="space-y-2">
-                {leaderboard.slice(3).map((entry, i) => (
+            {leaderboard.length > 0 && (
+              <div className="space-y-2 pt-2">
+                {leaderboard.map((entry, i) => (
                   <div key={entry.playerName} className="flex items-center gap-4 p-4 rounded-2xl border border-border/50 bg-card/50 backdrop-blur-xl">
-                    <span className="w-7 h-7 rounded-full bg-border text-muted-foreground flex items-center justify-center text-xs font-black">{i + 4}</span>
+                    <span className="w-7 h-7 rounded-full bg-border text-muted-foreground flex items-center justify-center text-xs font-black">{i + 1}</span>
                     <span className="flex-1 font-bold text-foreground text-left">{entry.playerName}</span>
                     <span className="font-black text-primary">{entry.score.toLocaleString()}</span>
                   </div>

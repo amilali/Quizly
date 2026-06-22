@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { useGameSocket } from "@/hooks/useGameSocket"
 import { Check, X, Clock, Trophy, Crown, Zap, AlertCircle } from "lucide-react"
 import { Logo } from "@/components/Logo"
+import Confetti from "react-confetti"
 
 // Kahoot palette
 const OPTIONS = [
@@ -22,10 +23,20 @@ type Phase = "join" | "waiting" | "question" | "answer_reveal" | "final"
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 }
 
+const EMOJIS = [
+  "🦊", "🐼", "🦁", "🐯", "🐨", "🐸", "🐰", "🐙", "🐵", "🦄", 
+  "🦉", "🐧", "🦖", "🦋", "🐞", "🐢", "🐬", "🦍", "🐕", "🐈", 
+  "🤖", "👾", "🧱", "🧩", "👽", "👷", "👻", "🤠", "😎", "🤓", 
+  "🐱", "🐶", "🐭", "🐹", "🐻", "🐮", "🐷", "🐒", "🐔", "🐦", 
+  "🐤", "🐺", "🐗", "🐴", "🐝", "🐛", "🐌", "🦀", "🐠", "🐡", 
+  "🦈", "🐊", "🐅", "🐆", "🦓", "🐘", "🦏", "🐪", "🦒", "🦘"
+]
+
 export default function PublicGameJoin() {
   const [pin, setPin] = useState("")
   const [nickname, setNickname] = useState("")
   const [phase, setPhase] = useState<Phase>("join")
+  const [selectedEmoji, setSelectedEmoji] = useState(EMOJIS[Math.floor(Math.random() * EMOJIS.length)])
   const [joinedPin, setJoinedPin] = useState<string | null>(null)
   const [joinedName, setJoinedName] = useState<string | null>(null)
   const [playerCount, setPlayerCount] = useState(0)
@@ -81,11 +92,12 @@ export default function PublicGameJoin() {
     if (!pin.trim() || !nickname.trim()) { setError("Please fill in both fields"); return }
     setLoading(true); setError("")
     try {
-      const res = await fetch("/api/game/join", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: pin.trim(), playerName: nickname.trim() }) })
+      const finalName = `${selectedEmoji} ${nickname.trim()}`
+      const res = await fetch("/api/game/join", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: pin.trim(), playerName: finalName }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Game not found")
       if (data.playerCount !== undefined) setPlayerCount(data.playerCount)
-      setJoinedPin(pin.trim()); setJoinedName(nickname.trim()); setPhase("waiting")
+      setJoinedPin(pin.trim()); setJoinedName(finalName); setPhase("waiting")
     } catch (e: any) { setError(e.message) }
     finally { setLoading(false) }
   }
@@ -150,10 +162,10 @@ export default function PublicGameJoin() {
                 <input
                   id="pin-input"
                   type="text"
-                  inputMode="numeric"
+                  inputMode="text"
                   maxLength={6}
                   value={pin}
-                  onChange={e => { setPin(e.target.value.replace(/\D/g, "")); setError("") }}
+                  onChange={e => { setPin(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")); setError("") }}
                   onKeyDown={e => e.key === "Enter" && handleJoin()}
                   placeholder="Game PIN"
                   className="w-full rounded-2xl border-2 border-gray-200 bg-white px-5 text-center text-3xl font-black font-mono tracking-[0.45em] text-gray-900 placeholder-gray-200 transition-all focus:outline-none focus:border-violet-500 shadow-sm"
@@ -165,14 +177,36 @@ export default function PublicGameJoin() {
               <input
                 id="nickname-input"
                 type="text"
-                maxLength={24}
+                maxLength={20}
                 value={nickname}
-                onChange={e => { setNickname(e.target.value); setError("") }}
+                onChange={e => { 
+                  setNickname(e.target.value); 
+                  setError(""); 
+                  if (e.target.value.length > 0) {
+                    setSelectedEmoji(EMOJIS[Math.floor(Math.random() * EMOJIS.length)]);
+                  }
+                }}
                 onKeyDown={e => e.key === "Enter" && handleJoin()}
                 placeholder="Your nickname"
                 className="w-full rounded-2xl border-2 border-gray-200 bg-white px-5 py-4 text-base font-semibold text-gray-900 placeholder-gray-300 transition-all focus:outline-none focus:border-violet-500 shadow-sm"
                 style={{ height: 58 }}
               />
+
+              {/* Emoji Picker */}
+              <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 shadow-sm">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Choose Avatar</p>
+                <div className="flex gap-2 overflow-x-auto custom-scrollbar py-2 px-1">
+                  {EMOJIS.map(e => (
+                    <button
+                      key={e}
+                      onClick={() => setSelectedEmoji(e)}
+                      className={`text-2xl w-12 h-12 flex items-center justify-center rounded-xl transition-all shrink-0 border-2 ${selectedEmoji === e ? 'bg-violet-100 border-violet-500 scale-110 shadow-md' : 'bg-gray-50 border-transparent hover:bg-gray-100 opacity-70 hover:opacity-100'}`}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <AnimatePresence>
                 {error && (
@@ -212,7 +246,7 @@ export default function PublicGameJoin() {
               <div className="relative mx-auto w-20 h-20 mb-6">
                 <div className="absolute inset-0 rounded-full border-2 border-violet-200 animate-ping opacity-50" />
                 <div className="absolute inset-1 rounded-full border-2 border-violet-300 animate-ping opacity-30" style={{ animationDelay: "0.3s" }} />
-                <div className="relative w-20 h-20 rounded-full bg-violet-50 border-2 border-violet-200 flex items-center justify-center text-3xl">🎮</div>
+                <div className="relative w-20 h-20 rounded-full bg-violet-50 border-2 border-violet-200 flex items-center justify-center text-4xl">{joinedName?.split(" ")[0] || "🎮"}</div>
               </div>
 
               <p className="text-2xl font-black text-gray-900">You're in!</p>
@@ -314,16 +348,6 @@ export default function PublicGameJoin() {
               )}
             </AnimatePresence>
 
-            {/* Score */}
-            {myEntry && (
-              <div className="flex justify-center">
-                <div className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-full px-5 py-2 text-sm shadow-sm">
-                  <span className="text-gray-400 font-medium">Score</span>
-                  <span className="w-px h-3 bg-gray-200" />
-                  <span className="text-violet-600 font-black">{myEntry.score.toLocaleString()}</span>
-                </div>
-              </div>
-            )}
           </motion.div>
         )}
 
@@ -397,10 +421,13 @@ export default function PublicGameJoin() {
         {/* ════════════════════════ FINAL ════════════════════════ */}
         {phase === "final" && (
           <motion.div key="final" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={spring} className="w-full max-w-md mx-auto px-5 py-10 flex flex-col gap-5">
+            <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={300} gravity={0.2} />
 
             {/* Header */}
             <div className="text-center">
-              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300, delay: 0.1 }} className="text-6xl mb-3">🏆</motion.div>
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300, delay: 0.1 }} className="text-8xl mb-4">
+                {joinedName?.split(" ")[0] || "🏆"}
+              </motion.div>
               <h2 className="text-3xl font-black text-gray-900 tracking-tight">Game Over!</h2>
               <p className="text-gray-400 text-sm font-medium mt-1">Final results are in</p>
             </div>
