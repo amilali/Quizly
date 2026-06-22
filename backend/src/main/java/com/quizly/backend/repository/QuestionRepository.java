@@ -10,4 +10,5 @@ import java.util.List;
 public interface QuestionRepository extends JpaRepository<Question, Long> {
     List<Question> findByCreatorIdOrReviewerId(String creatorId, String reviewerId);
     List<Question> findByStackEntityNameIgnoreCaseAndTopicEntityNameIgnoreCase(String stackName, String topicName);
+    List<Question> findByStemIgnoreCase(String stem);
 }

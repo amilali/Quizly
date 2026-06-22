@@ -63,20 +63,34 @@ export default function MyQuestions() {
   const [aiFormData, setAiFormData] = useState({ stack: "", topic: "", difficulty: "Medium", count: 5 })
   const [isGenerating, setIsGenerating] = useState(false)
   const [duplicateCheckResult, setDuplicateCheckResult] = useState<any>(null)
+  const [conflictError, setConflictError] = useState<any>(null)
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false)
+  const [isRegenerating, setIsRegenerating] = useState(false)
+  const [intendedSingleStatus, setIntendedSingleStatus] = useState<"Draft" | "Under Review" | "Ready for Review">("Draft")
+  const [intendedEditStatus, setIntendedEditStatus] = useState<"Draft" | "Under Review" | "Ready for Review">("Ready for Review")
 
-  const handleCreateSingle = (status: "Draft" | "Under Review" | "Ready for Review") => {
+  const handleCreateSingle = async (status: "Draft" | "Under Review" | "Ready for Review") => {
+    setIntendedSingleStatus(status);
     const newQ = {
       ...newQuestionData,
       status,
       creatorId: userName || ""
     };
-    dispatch(createQuestion(newQ));
-    setIsAddModalOpen(false);
-    setTimeout(() => {
-      setAddMode("select");
-      setNewQuestionData({ stem: "", stack: "", topic: "", difficulty: "Medium", options: ["", "", "", ""], correctOption: 0 });
-    }, 300);
+    try {
+      await dispatch(createQuestion({ question: newQ })).unwrap();
+      setIsAddModalOpen(false);
+      setConflictError(null);
+      setTimeout(() => {
+        setAddMode("select");
+        setNewQuestionData({ stem: "", stack: "", topic: "", difficulty: "Medium", options: ["", "", "", ""], correctOption: 0 });
+      }, 300);
+    } catch (err: any) {
+      if (err?.duplicate) {
+        setConflictError({ type: 'single', details: err });
+      } else {
+        console.error("Failed to create question:", err);
+      }
+    }
   }
 
   const handleBulkUpload = async (file: File) => {
@@ -85,22 +99,37 @@ export default function MyQuestions() {
       const data = await file.arrayBuffer();
       const worker = new ExcelWorker();
       
-      worker.onmessage = (e) => {
+      worker.onmessage = async (e) => {
         const { success, parsedQuestions, error } = e.data;
+        worker.terminate();
+        
         if (success && parsedQuestions.length > 0) {
           const questionsWithCreator = parsedQuestions.map((q: any) => ({
             ...q,
             creatorId: userName || ""
           }));
-          dispatch(createQuestionsBulk(questionsWithCreator));
-        } else if (!success) {
-          console.error("Error parsing file:", error);
+          try {
+            await dispatch(createQuestionsBulk({ questions: questionsWithCreator })).unwrap();
+            setIsUploading(false);
+            setIsAddModalOpen(false);
+            setConflictError(null);
+            setTimeout(() => setAddMode("select"), 300);
+          } catch (err: any) {
+            setIsUploading(false);
+            if (err?.duplicates) {
+              // Stay open — show duplicate review inside the modal
+              setConflictError({ type: 'bulk', details: err });
+              dispatch(fetchQuestions());
+            } else {
+              console.error("Bulk upload failed:", err);
+              setIsAddModalOpen(false);
+              setTimeout(() => setAddMode("select"), 300);
+            }
+          }
+        } else {
+          setIsUploading(false);
+          if (!success) console.error("Error parsing file:", error);
         }
-        
-        worker.terminate();
-        setIsUploading(false);
-        setIsAddModalOpen(false);
-        setTimeout(() => setAddMode("select"), 300);
       };
 
       worker.onerror = (err) => {
@@ -125,26 +154,36 @@ export default function MyQuestions() {
 
   const handleGenerateAi = async () => {
     setIsGenerating(true);
-    try {
-      await dispatch(generateQuestionsAi(aiFormData)).unwrap();
-      setIsAddModalOpen(false);
-      setTimeout(() => setAddMode("select"), 300);
-    } catch (err) {
-      console.error("AI Generation failed", err);
+        try {
+      const result = await dispatch(generateQuestionsAi(aiFormData)).unwrap();
+      if (result.discardedDuplicates) {
+        setConflictError({ type: 'ai', details: result });
+      } else {
+        setIsAddModalOpen(false);
+        setTimeout(() => setAddMode("select"), 300);
+      }
+        } catch (err: any) {
+      if (err?.error && err?.discardedDuplicates) {
+        setConflictError({ type: 'ai_error', details: err });
+      } else {
+        console.error("AI Generation failed", err);
+      }
     } finally {
       setIsGenerating(false);
     }
   }
 
-  const handleSaveAndReviewWithDuplicateCheck = async () => {
+  const handleSaveAndReviewWithDuplicateCheck = async (status: "Draft" | "Under Review" | "Ready for Review") => {
     if (!editFormData) return;
+    setIntendedEditStatus(status);
+    setDuplicateCheckResult(null);
     setIsCheckingDuplicate(true);
     try {
       const result = await checkDuplicateAi(editFormData);
-      if (result.isDuplicate) {
+      if (result.duplicate) {
         setDuplicateCheckResult(result);
       } else {
-        handleSaveChanges("Ready for Review");
+        handleSaveChanges(status);
       }
     } catch (err) {
       console.error("Duplicate check failed", err);
@@ -153,8 +192,55 @@ export default function MyQuestions() {
     }
   }
 
+  
+  const handleOverrideSingle = async () => {
+    const newQ = {
+      ...newQuestionData,
+      status: intendedSingleStatus,
+      creatorId: userName || ""
+    };
+    try {
+      await dispatch(createQuestion({ question: newQ, override: true })).unwrap();
+      setIsAddModalOpen(false);
+      setConflictError(null);
+      setTimeout(() => {
+        setAddMode("select");
+        setNewQuestionData({ stem: "", stack: "", topic: "", difficulty: "Medium", options: ["", "", "", ""], correctOption: 0 });
+      }, 300);
+    } catch (err) {
+      console.error("Failed to override single question", err);
+    }
+  }
+
+  const handleOverrideBulk = async () => {
+    if (!conflictError?.details?.duplicates) return;
+    const questionsToOverride = conflictError.details.duplicates.map((dup: any) => dup.originalQuestion);
+    try {
+      await dispatch(createQuestionsBulk({ questions: questionsToOverride, override: true })).unwrap();
+      setIsAddModalOpen(false);
+      setConflictError(null);
+      setTimeout(() => setAddMode("select"), 300);
+    } catch (err) {
+      console.error("Failed to override bulk duplicates", err);
+    }
+  }
+
+  const handleOverrideAi = async () => {
+    if (!conflictError?.details?.discardedDuplicates) return;
+    const questionsToOverride = conflictError.details.discardedDuplicates.map((dup: any) => dup.originalQuestion);
+    try {
+      await dispatch(createQuestionsBulk({ questions: questionsToOverride, override: true })).unwrap();
+      setIsAddModalOpen(false);
+      setConflictError(null);
+      setTimeout(() => setAddMode("select"), 300);
+    } catch (err) {
+      console.error("Failed to override AI duplicates", err);
+    }
+  }
+
   const handleManualDuplicateCheck = async () => {
     if (!editFormData) return;
+    setDuplicateCheckResult(null);
     setIsCheckingDuplicate(true);
     try {
       const result = await checkDuplicateAi(editFormData);
@@ -163,6 +249,44 @@ export default function MyQuestions() {
       console.error("Duplicate check failed", err);
     } finally {
       setIsCheckingDuplicate(false);
+    }
+  }
+
+  const handleRegenerate = async () => {
+    if (!editFormData) return;
+    setIsRegenerating(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/questions/generate-draft', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          stack: editFormData.stack || "",
+          topic: editFormData.topic || "",
+          difficulty: editFormData.difficulty || "Medium",
+          count: 1,
+          avoidStems: duplicateCheckResult?.similarQuestions?.map((sq: any) => sq.stem) || []
+        })
+      });
+      if (response.ok) {
+        const regeneratedQuestion = await response.json();
+        setEditFormData({
+          ...editFormData,
+          stem: regeneratedQuestion.stem,
+          options: regeneratedQuestion.options || ["", "", "", ""],
+          correctOption: regeneratedQuestion.correctOption ?? 0
+        });
+        setDuplicateCheckResult(null);
+      } else {
+        console.error("Failed to regenerate");
+      }
+    } catch (err) {
+      console.error("Error regenerating question", err);
+    } finally {
+      setIsRegenerating(false);
     }
   }
 
@@ -205,7 +329,17 @@ export default function MyQuestions() {
           <p className="text-sm sm:text-base text-muted-foreground mt-2 font-medium">Manage and track the questions you've created.</p>
         </motion.div>
         
-        <Dialog open={isAddModalOpen} onOpenChange={(val) => { setIsAddModalOpen(val); if(!val) setTimeout(() => setAddMode("select"), 300); }}>
+        <Dialog open={isAddModalOpen} onOpenChange={(val) => { 
+          setIsAddModalOpen(val); 
+          if(!val) {
+            setTimeout(() => {
+              setAddMode("select");
+              setNewQuestionData({ stem: "", stack: "", topic: "", difficulty: "Medium", options: ["", "", "", ""], correctOption: 0 });
+              setConflictError(null);
+              setAiFormData({ stack: "", topic: "", difficulty: "Medium", count: 5 });
+            }, 300);
+          }
+        }}>
           <DialogTrigger className="bg-primary hover:bg-primary/90 text-white shadow-sm transition-all duration-300 rounded-xl px-6 py-6 font-bold tracking-wide inline-flex items-center justify-center whitespace-nowrap">
             <Plus className="mr-2 h-5 w-5" /> <span className="hidden sm:inline">Add Question</span>
           </DialogTrigger>
@@ -255,6 +389,62 @@ export default function MyQuestions() {
                   </DialogTitle>
                   <p className="text-sm text-muted-foreground mt-1 ml-10">Automatically generate multiple choice questions tailored to your needs.</p>
                 </DialogHeader>
+                {conflictError?.type === 'ai' && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/50 p-5 rounded-2xl text-yellow-700 dark:text-yellow-400 mb-4 shadow-sm max-h-60 overflow-y-auto no-scrollbar">
+                    <div className="flex justify-between items-start mb-2 gap-4">
+                      <h3 className="font-bold flex items-center text-lg"><AlertTriangle className="w-5 h-5 mr-2 shrink-0" /> Partial Generation Completed</h3>
+                      <Button onClick={handleOverrideAi} className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-xl shadow-sm h-8 px-4 text-xs shrink-0 whitespace-nowrap">
+                        Force Save Discarded
+                      </Button>
+                    </div>
+                    <p className="text-sm mb-4">We saved {conflictError.details.saved?.length} unique questions, but {conflictError.details.discardedDuplicates?.length} questions were discarded because they were too similar to existing ones.</p>
+                    <details className="group mt-2">
+                      <summary className="text-sm font-bold cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center outline-none hover:text-yellow-900 dark:hover:text-yellow-300 transition-colors">
+                        <ChevronRight className="w-4 h-4 mr-1 transition-transform group-open:rotate-90" />
+                        View Discarded Questions ({conflictError.details.discardedDuplicates?.length})
+                      </summary>
+                      <div className="space-y-3 mt-3">
+                        {conflictError.details.discardedDuplicates?.map((dup: any, i: number) => (
+                          <div key={i} className="bg-background/80 p-4 rounded-xl text-sm border border-yellow-500/20 shadow-inner">
+                            <p className="font-semibold mb-2">Discarded Generated Question:</p>
+                            <p className="text-foreground/80 italic mb-2">"{dup.generatedStem}"</p>
+                            <p className="font-semibold mb-2 text-yellow-800 dark:text-yellow-300">Conflicts With:</p>
+                            <ul className="list-disc pl-5">
+                              {dup.conflicts?.map((c: any) => (
+                                <li key={c.questionId} className="text-yellow-800/80 dark:text-yellow-300/80">ID {c.questionId} ({c.similarityPercentage}% match): {c.stem}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  </div>
+                )}
+                {conflictError?.type === 'ai_error' && (
+                  <div className="bg-red-500/10 border border-red-500/50 p-5 rounded-2xl text-red-700 dark:text-red-400 mb-4 shadow-sm max-h-60 overflow-y-auto no-scrollbar">
+                    <div className="flex justify-between items-start mb-2 gap-4">
+                      <h3 className="font-bold flex items-center text-lg"><AlertTriangle className="w-5 h-5 mr-2 shrink-0" /> Generation Failed</h3>
+                      <Button onClick={handleOverrideAi} className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-sm h-8 px-4 text-xs shrink-0 whitespace-nowrap">
+                        Force Save Discarded
+                      </Button>
+                    </div>
+                    <p className="text-sm mb-4">{conflictError.details.error}</p>
+                    <details className="group mt-2">
+                      <summary className="text-sm font-bold cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center outline-none hover:text-red-900 dark:hover:text-red-300 transition-colors">
+                        <ChevronRight className="w-4 h-4 mr-1 transition-transform group-open:rotate-90" />
+                        View Discarded Questions ({conflictError.details.discardedDuplicates?.length})
+                      </summary>
+                      <div className="space-y-3 mt-3">
+                        {conflictError.details.discardedDuplicates?.map((dup: any, i: number) => (
+                          <div key={i} className="bg-background/80 p-4 rounded-xl text-sm border border-red-500/20 shadow-inner">
+                            <p className="font-semibold mb-2">Discarded Generated Question:</p>
+                            <p className="text-foreground/80 italic mb-2">"{dup.generatedStem}"</p>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  </div>
+                )}
                 <div className="grid gap-6 mt-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
@@ -332,6 +522,79 @@ export default function MyQuestions() {
                   </DialogTitle>
                   <p className="text-sm text-muted-foreground mt-1">Upload a CSV or XLSX file containing multiple questions.</p>
                 </DialogHeader>
+                {conflictError?.type === 'bulk' && (
+                  <div className="border border-red-500/40 rounded-2xl overflow-hidden shadow-sm mb-4">
+                    <div className="bg-red-500/10 px-5 pt-5 pb-4">
+                      <div className="flex justify-between items-start gap-4 mb-2">
+                        <h3 className="font-bold flex items-center text-lg text-red-700 dark:text-red-400">
+                          <AlertTriangle className="w-5 h-5 mr-2 shrink-0" /> Duplicates Found
+                        </h3>
+                        <Button
+                          onClick={handleOverrideBulk}
+                          className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-sm h-8 px-4 text-xs shrink-0 whitespace-nowrap"
+                        >
+                          Save All Anyway
+                        </Button>
+                      </div>
+                      <p className="text-sm text-red-700 dark:text-red-400">
+                        {conflictError.details.savedCount} question{conflictError.details.savedCount !== 1 ? 's' : ''} saved. The {conflictError.details.duplicates?.length} below are duplicates — remove them or force-save.
+                      </p>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto no-scrollbar divide-y divide-red-500/10">
+                      {conflictError.details.duplicates?.map((dup: any, i: number) => (
+                        <div key={i} className="bg-background/80 px-5 py-4 flex flex-col gap-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-sm font-semibold text-foreground flex-1 leading-snug">"{dup.question}"</p>
+                            <div className="flex gap-2 shrink-0">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-3 text-xs rounded-lg border-red-500/40 text-red-600 hover:bg-red-500/10"
+                                onClick={() => {
+                                  const remaining = conflictError.details.duplicates.filter((_: any, idx: number) => idx !== i);
+                                  if (remaining.length === 0) {
+                                    setConflictError(null);
+                                    setTimeout(() => { setAddMode("select"); setIsAddModalOpen(false); }, 100);
+                                  } else {
+                                    setConflictError({ type: 'bulk', details: { ...conflictError.details, duplicates: remaining } });
+                                  }
+                                }}
+                              >
+                                Remove
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="h-7 px-3 text-xs rounded-lg bg-orange-600 hover:bg-orange-700 text-white"
+                                onClick={async () => {
+                                  await dispatch(createQuestionsBulk({ questions: [dup.originalQuestion], override: true })).unwrap().catch(() => {});
+                                  const remaining = conflictError.details.duplicates.filter((_: any, idx: number) => idx !== i);
+                                  if (remaining.length === 0) {
+                                    setConflictError(null);
+                                    dispatch(fetchQuestions());
+                                    setTimeout(() => { setAddMode("select"); setIsAddModalOpen(false); }, 100);
+                                  } else {
+                                    setConflictError({ type: 'bulk', details: { ...conflictError.details, duplicates: remaining } });
+                                    dispatch(fetchQuestions());
+                                  }
+                                }}
+                              >
+                                Save Anyway
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            <span className="font-semibold text-red-600 dark:text-red-400">Conflicts with: </span>
+                            {dup.conflicts?.map((c: any) => (
+                              <span key={c.questionId} className="inline-block mr-2">
+                                Q#{c.questionId} ({c.similarityPercentage}% match)
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="flex flex-col items-center justify-center p-10 border-2 border-dashed border-border/50 rounded-2xl bg-black/5 dark:bg-white/[0.02] mt-4">
                   {isUploading ? (
                     <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
@@ -370,6 +633,31 @@ export default function MyQuestions() {
                   </DialogTitle>
                   <p className="text-sm text-muted-foreground font-medium ml-8">Fill out the stem, topics, and options below.</p>
                 </DialogHeader>
+                {conflictError?.type === 'single' && (
+                  <div className="bg-red-500/10 border border-red-500/50 p-5 rounded-2xl text-red-700 dark:text-red-400 mb-4 shadow-sm">
+                    <div className="flex justify-between items-start mb-2 gap-4">
+                      <h3 className="font-bold flex items-center text-lg"><AlertTriangle className="w-5 h-5 mr-2 shrink-0" /> Duplicate Detected</h3>
+                      <Button onClick={handleOverrideSingle} className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-sm h-8 px-4 text-xs shrink-0 whitespace-nowrap">
+                        Force Save Anyway
+                      </Button>
+                    </div>
+                    <p className="text-sm mb-4">Your question is too similar to an existing question in the bank and cannot be saved.</p>
+                    <details className="group mt-2">
+                      <summary className="text-sm font-bold cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center outline-none hover:text-red-900 dark:hover:text-red-300 transition-colors">
+                        <ChevronRight className="w-4 h-4 mr-1 transition-transform group-open:rotate-90" />
+                        View Conflicts ({conflictError.details.similarQuestions?.length})
+                      </summary>
+                      <div className="space-y-3 mt-3">
+                        {conflictError.details.similarQuestions?.map((sq: any) => (
+                          <div key={sq.questionId} className="bg-background/80 p-4 rounded-xl text-sm border border-red-500/20 shadow-inner">
+                            <strong className="text-red-800 dark:text-red-300">Question ID {sq.questionId} - {sq.similarityPercentage}% similar</strong>
+                            <p className="mt-2 text-foreground/80">{sq.stem}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  </div>
+                )}
                 
                 <div className="grid gap-6">
                   <div className="space-y-2">
@@ -449,7 +737,7 @@ export default function MyQuestions() {
           </DialogContent>
         </Dialog>
         {/* Edit Question Dialog */}
-        <Dialog open={editFormData !== null} onOpenChange={(open) => !open && setEditFormData(null)}>
+        <Dialog open={editFormData !== null} onOpenChange={(open) => { if (!open) { setEditFormData(null); setDuplicateCheckResult(null); } }}>
           <DialogContent className="sm:max-w-3xl bg-background/95 backdrop-blur-3xl border border-border/50 shadow-2xl rounded-3xl p-8 sm:p-10 max-h-[90vh] overflow-y-auto overflow-x-hidden no-scrollbar">
             <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/10 rounded-full blur-3xl opacity-50 pointer-events-none" />
             <DialogHeader className="mb-8 relative z-10 flex flex-col items-center text-center">
@@ -463,21 +751,38 @@ export default function MyQuestions() {
             </DialogHeader>
             {editFormData && (
               <div className="grid gap-8 relative z-10">
-                {duplicateCheckResult && duplicateCheckResult.isDuplicate && (
+                {duplicateCheckResult && duplicateCheckResult.duplicate && (
                   <div className="bg-red-500/10 border border-red-500/50 p-5 rounded-2xl text-red-700 dark:text-red-400 mb-2 shadow-sm">
-                    <h3 className="font-bold mb-2 flex items-center text-lg"><AlertTriangle className="w-5 h-5 mr-2" /> Duplicate Check Failed</h3>
-                    <p className="text-sm mb-4">A similarity match was detected with an existing question in the question bank for the same technology stack and topic based on question stem and option.</p>
-                    <div className="space-y-3">
-                      {duplicateCheckResult.similarQuestions.map((sq: any) => (
-                        <div key={sq.questionId} className="bg-background/80 p-4 rounded-xl text-sm border border-red-500/20 shadow-inner">
-                          <strong className="text-red-800 dark:text-red-300">Question ID {sq.questionId} - {sq.similarityPercentage}% similar</strong>
-                          <p className="mt-2 text-foreground/80">{sq.stem}</p>
-                        </div>
-                      ))}
+                    <div className="flex justify-between items-start mb-2 gap-4">
+                      <h3 className="font-bold flex items-center text-lg"><AlertTriangle className="w-5 h-5 mr-2 shrink-0" /> Duplicate Found</h3>
+                      <div className="flex gap-2">
+                        <Button onClick={handleRegenerate} disabled={isRegenerating} className="bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-sm h-8 px-4 text-xs shrink-0 whitespace-nowrap">
+                          {isRegenerating ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />}
+                          Regenerate
+                        </Button>
+                        <Button onClick={() => handleSaveChanges(intendedEditStatus)} className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-sm h-8 px-4 text-xs shrink-0 whitespace-nowrap">
+                          Force Save Anyway
+                        </Button>
+                      </div>
                     </div>
+                    <p className="text-sm mb-4">A similarity match was detected with an existing question in the question bank for the same technology stack and topic based on question stem and option.</p>
+                    <details className="group mt-2">
+                      <summary className="text-sm font-bold cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center outline-none hover:text-red-900 dark:hover:text-red-300 transition-colors">
+                        <ChevronRight className="w-4 h-4 mr-1 transition-transform group-open:rotate-90" />
+                        View Conflicts ({duplicateCheckResult.similarQuestions?.length})
+                      </summary>
+                      <div className="space-y-3 mt-3">
+                        {duplicateCheckResult.similarQuestions?.map((sq: any) => (
+                          <div key={sq.questionId} className="bg-background/80 p-4 rounded-xl text-sm border border-red-500/20 shadow-inner">
+                            <strong className="text-red-800 dark:text-red-300">Question ID {sq.questionId} - {sq.similarityPercentage}% similar</strong>
+                            <p className="mt-2 text-foreground/80">{sq.stem}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
                   </div>
                 )}
-                {duplicateCheckResult && !duplicateCheckResult.isDuplicate && (
+                {duplicateCheckResult && !duplicateCheckResult.duplicate && (
                   <div className="bg-green-500/10 border border-green-500/50 p-4 rounded-2xl text-green-700 dark:text-green-400 mb-2 flex items-center shadow-sm">
                     <Sparkles className="w-5 h-5 mr-2" /> <span className="font-bold">Good to go!</span> <span className="ml-2">No significant duplicates found (Highest similarity: {Math.round(duplicateCheckResult.highestSimilarity * 100)}%).</span>
                   </div>
@@ -596,14 +901,16 @@ export default function MyQuestions() {
                   <Trash2 className="w-5 h-5 mr-2" /> Delete
                 </Button>
                 <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto justify-end">
-                  <Button variant="ghost" onClick={handleManualDuplicateCheck} disabled={isCheckingDuplicate} className="rounded-xl font-bold py-6 px-5 border border-border/50 text-muted-foreground hover:text-foreground w-full sm:w-auto bg-black/5 dark:bg-white/[0.02] hover:bg-black/10 dark:hover:bg-white/10">
+                  <Button variant="ghost" onClick={handleManualDuplicateCheck} disabled={isCheckingDuplicate} className="rounded-xl font-bold py-5 px-4 border border-border/50 text-muted-foreground hover:text-foreground w-full sm:w-auto bg-black/5 dark:bg-white/[0.02] hover:bg-black/10 dark:hover:bg-white/10">
                     {isCheckingDuplicate ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : "Duplicate Check"}
                   </Button>
-                  <Button variant="secondary" onClick={() => handleSaveChanges("Draft")} className="rounded-xl font-bold py-6 px-6 transition-all w-full sm:w-auto border border-border/50 shadow-sm">Save as Draft</Button>
-                  <Button onClick={handleSaveAndReviewWithDuplicateCheck} disabled={isCheckingDuplicate} className="relative overflow-hidden rounded-xl font-bold bg-primary text-white hover:bg-primary/90 py-6 px-7 shadow-[0_4px_20px_rgba(var(--primary),0.25)] hover:shadow-[0_4px_25px_rgba(var(--primary),0.4)] transition-all flex items-center justify-center w-full sm:w-auto group border border-primary/20">
+                  <Button variant="secondary" onClick={() => handleSaveAndReviewWithDuplicateCheck("Draft")} disabled={isCheckingDuplicate} className="rounded-xl font-bold py-5 px-4 transition-all w-full sm:w-auto border border-border/50 shadow-sm">
+                    {isCheckingDuplicate && intendedEditStatus === "Draft" ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Checking...</> : "Save as Draft"}
+                  </Button>
+                  <Button onClick={() => handleSaveAndReviewWithDuplicateCheck("Ready for Review")} disabled={isCheckingDuplicate} className="relative overflow-hidden rounded-xl font-bold bg-primary text-white hover:bg-primary/90 py-5 px-4 shadow-[0_4px_20px_rgba(var(--primary),0.25)] hover:shadow-[0_4px_25px_rgba(var(--primary),0.4)] transition-all flex items-center justify-center w-full sm:w-auto group border border-primary/20">
                     <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite_linear]" />
                     <span className="relative z-10 flex items-center drop-shadow-md">
-                      {isCheckingDuplicate ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Checking...</> : "Save & Send for Review"}
+                      {isCheckingDuplicate && intendedEditStatus === "Ready for Review" ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Checking...</> : "Save & Send for Review"}
                     </span>
                   </Button>
                 </div>
@@ -776,11 +1083,14 @@ export default function MyQuestions() {
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
-                                onClick={() => setEditFormData({ 
-                                  ...q, 
-                                  options: q.options || ["", "", "", ""], 
-                                  correctOption: q.correctOption ?? 0 
-                                })}
+                                onClick={() => {
+                                  setDuplicateCheckResult(null);
+                                  setEditFormData({ 
+                                    ...q, 
+                                    options: q.options || ["", "", "", ""], 
+                                    correctOption: q.correctOption ?? 0 
+                                  });
+                                }}
                                 className="text-primary hover:text-primary hover:bg-primary/10 transition-all rounded-lg inline-flex items-center"
                               >
                                 <Edit3 className="w-4 h-4 mr-2" /> <span>Edit</span>

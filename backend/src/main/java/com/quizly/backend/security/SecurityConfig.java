@@ -35,6 +35,9 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/ws/**").permitAll()
+                        .requestMatchers("/api/game/join").permitAll()
+                        .requestMatchers("/api/game/*/status").permitAll()
                         .requestMatchers("/").permitAll()
                         .anyRequest().authenticated()
                 )

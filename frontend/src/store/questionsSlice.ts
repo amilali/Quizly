@@ -26,33 +26,41 @@ export const fetchQuestions = createAsyncThunk('questions/fetchQuestions', async
   return data.map((q: any) => ({ ...q, id: String(q.id) }));
 });
 
-export const createQuestion = createAsyncThunk('questions/createQuestion', async (question: Omit<Question, 'id'>) => {
+export const createQuestion = createAsyncThunk('questions/createQuestion', async (payload: { question: Omit<Question, 'id'>, override?: boolean }, { rejectWithValue }) => {
   const token = localStorage.getItem('token');
-  const response = await fetch('/api/questions', {
+  const url = payload.override ? '/api/questions?override=true' : '/api/questions';
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(question)
+    body: JSON.stringify(payload.question)
   });
-  if (!response.ok) throw new Error('Failed to create question');
   const data = await response.json();
+  if (!response.ok) {
+    if (response.status === 409) return rejectWithValue(data);
+    throw new Error('Failed to create question');
+  }
   return { ...data, id: String(data.id) };
 });
 
-export const createQuestionsBulk = createAsyncThunk('questions/createQuestionsBulk', async (questions: Omit<Question, 'id'>[]) => {
+export const createQuestionsBulk = createAsyncThunk('questions/createQuestionsBulk', async (payload: { questions: Omit<Question, 'id'>[], override?: boolean }, { rejectWithValue }) => {
   const token = localStorage.getItem('token');
-  const response = await fetch('/api/questions/bulk', {
+  const url = payload.override ? '/api/questions/bulk?override=true' : '/api/questions/bulk';
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(questions)
+    body: JSON.stringify(payload.questions)
   });
-  if (!response.ok) throw new Error('Failed to upload bulk questions');
   const data = await response.json();
+  if (!response.ok) {
+    if (response.status === 409) return rejectWithValue(data);
+    throw new Error('Failed to upload bulk questions');
+  }
   return data.map((q: any) => ({ ...q, id: String(q.id) }));
 });
 
@@ -83,7 +91,7 @@ export const deleteQuestion = createAsyncThunk('questions/deleteQuestion', async
   return id;
 });
 
-export const generateQuestionsAi = createAsyncThunk('questions/generateQuestionsAi', async (request: { stack: string, topic: string, difficulty: string, count: number }) => {
+export const generateQuestionsAi = createAsyncThunk('questions/generateQuestionsAi', async (request: { stack: string, topic: string, difficulty: string, count: number }, { rejectWithValue }) => {
   const token = localStorage.getItem('token');
   const response = await fetch('/api/questions/generate', {
     method: 'POST',
@@ -93,8 +101,17 @@ export const generateQuestionsAi = createAsyncThunk('questions/generateQuestions
     },
     body: JSON.stringify(request)
   });
-  if (!response.ok) throw new Error('Failed to generate questions');
   const data = await response.json();
+  if (!response.ok) {
+    if (response.status === 409) return rejectWithValue(data);
+    throw new Error('Failed to generate questions');
+  }
+  
+  // The backend might return 201 with saved and discardedDuplicates
+  if (response.status === 201 && data.saved) {
+    // We attach the full response object if there are warnings
+    return data; 
+  }
   return data.map((q: any) => ({ ...q, id: String(q.id) }));
 });
 
@@ -165,7 +182,11 @@ const questionsSlice = createSlice({
       })
       .addCase(generateQuestionsAi.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.list = [...action.payload, ...state.list];
+        if (action.payload && action.payload.saved) {
+          state.list = [...action.payload.saved.map((q: any) => ({ ...q, id: String(q.id) })), ...state.list];
+        } else {
+          state.list = [...action.payload, ...state.list];
+        }
       })
       .addCase(generateQuestionsAi.rejected, (state, action) => {
         state.isLoading = false;
