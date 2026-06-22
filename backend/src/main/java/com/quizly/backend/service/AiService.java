@@ -131,7 +131,7 @@ public class AiService {
                 "format", converter.getFormat()
             ));
             
-            String response = chatModel.call(prompt).getResult().getOutput().getContent();
+            String response = chatModel.call(prompt).getResult().getOutput().getText();
             com.quizly.backend.dto.AiQuestionResponse aiQuestion = converter.convert(response);
             
             if (aiQuestion != null) {
