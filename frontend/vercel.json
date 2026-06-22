@@ -5,7 +5,11 @@
       "destination": "https://fiber-subwoofer-dwarf.ngrok-free.dev/api/$1"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/ws/(.*)",
+      "destination": "https://fiber-subwoofer-dwarf.ngrok-free.dev/ws/$1"
+    },
+    {
+      "source": "/((?!api/|ws/).*)",
       "destination": "/index.html"
     }
   ]
