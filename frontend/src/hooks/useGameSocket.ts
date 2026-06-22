@@ -24,7 +24,7 @@ export function useGameSocket({ pin, playerName, onMessage, onPersonalMessage }:
     if (!pin) return;
 
     const client = new Client({
-      webSocketFactory: () => new SockJS('/ws'),
+      webSocketFactory: () => new SockJS('https://fiber-subwoofer-dwarf.ngrok-free.dev/ws'),
       reconnectDelay: 5000,
       onConnect: () => {
         // Subscribe to the game's broadcast channel
