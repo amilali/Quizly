@@ -60,7 +60,7 @@ export default function MyQuestions() {
   const [newQuestionData, setNewQuestionData] = useState({ stem: "", stack: "", topic: "", difficulty: "Medium", options: ["", "", "", ""], correctOption: 0 })
   const [isUploading, setIsUploading] = useState(false)
 
-  const handleCreateSingle = (status: "Draft" | "Under Review") => {
+  const handleCreateSingle = (status: "Draft" | "Under Review" | "Ready for Review") => {
     const newQ = {
       ...newQuestionData,
       status,
@@ -111,7 +111,7 @@ export default function MyQuestions() {
     }
   }
 
-  const handleSaveChanges = (status: "Draft" | "Under Review") => {
+  const handleSaveChanges = (status: "Draft" | "Under Review" | "Ready for Review") => {
     if (!editFormData) return;
     dispatch(editQuestion({ ...editFormData, status }) as any);
     setEditFormData(null);
@@ -308,7 +308,7 @@ export default function MyQuestions() {
                 <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-border/30">
                   <Button variant="ghost" onClick={() => setIsAddModalOpen(false)} className="rounded-xl font-bold py-6 px-6">Cancel</Button>
                   <Button variant="secondary" onClick={() => handleCreateSingle("Draft")} disabled={!newQuestionData.stem} className="rounded-xl font-bold py-6 px-8 transition-all">Save as Draft</Button>
-                  <Button onClick={() => handleCreateSingle("Under Review")} disabled={!newQuestionData.stem} className="rounded-xl font-bold bg-primary text-white hover:bg-primary/90 py-6 px-8 shadow-md hover:shadow-lg transition-all">Save & Review</Button>
+                  <Button onClick={() => handleCreateSingle("Ready for Review")} disabled={!newQuestionData.stem} className="rounded-xl font-bold bg-primary text-white hover:bg-primary/90 py-6 px-8 shadow-md hover:shadow-lg transition-all">Save & Review</Button>
                 </div>
               </>
             )}
@@ -405,7 +405,7 @@ export default function MyQuestions() {
               <div className="flex gap-3">
                 <Button variant="ghost" onClick={() => setEditFormData(null)} className="rounded-xl font-bold py-6 px-6">Cancel</Button>
                 <Button variant="secondary" onClick={() => handleSaveChanges("Draft")} className="rounded-xl font-bold py-6 px-8 transition-all">Save as Draft</Button>
-                <Button onClick={() => handleSaveChanges("Under Review")} className="rounded-xl font-bold bg-primary text-white hover:bg-primary/90 py-6 px-8 shadow-md hover:shadow-lg transition-all">Save & Review</Button>
+                <Button onClick={() => handleSaveChanges("Ready for Review")} className="rounded-xl font-bold bg-primary text-white hover:bg-primary/90 py-6 px-8 shadow-md hover:shadow-lg transition-all">Save & Review</Button>
               </div>
             </div>
           </DialogContent>
