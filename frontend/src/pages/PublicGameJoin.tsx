@@ -84,6 +84,7 @@ export default function PublicGameJoin() {
       const res = await fetch("/api/game/join", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: pin.trim(), playerName: nickname.trim() }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Game not found")
+      if (data.playerCount !== undefined) setPlayerCount(data.playerCount)
       setJoinedPin(pin.trim()); setJoinedName(nickname.trim()); setPhase("waiting")
     } catch (e: any) { setError(e.message) }
     finally { setLoading(false) }

@@ -87,6 +87,7 @@ public class GameService {
         response.put("playerName", playerName);
         response.put("status", "JOINED");
         response.put("totalQuestions", session.getTotalQuestions());
+        response.put("playerCount", session.getPlayerScores().size());
         return response;
     }
 
