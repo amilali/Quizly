@@ -81,7 +81,7 @@
             "uid": "prometheus"
           },
           "editorMode": "builder",
-          "expr": "sum by(status) (increase(quizly_answers_total[$__range]))",
+          "expr": "sum by(status) (quizly_answers_total)",
           "instant": false,
           "legendFormat": "{{status}}",
           "range": true,
@@ -144,7 +144,7 @@
             "uid": "prometheus"
           },
           "editorMode": "builder",
-          "expr": "sum(increase(quizly_game_started_total[$__range]))",
+          "expr": "sum(quizly_game_started_total)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
