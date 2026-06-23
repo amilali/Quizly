@@ -208,46 +208,29 @@ public class QuestionController {
     public ResponseEntity<?> generateQuestions(@RequestBody com.quizly.backend.dto.GenerateRequest request, Principal principal) {
         String creatorId = principal != null ? principal.getName() : "system";
         List<Question> generated = aiService.generateQuestions(request, creatorId);
-        
-        List<Question> uniqueQuestions = new java.util.ArrayList<>();
-        List<java.util.Map<String, Object>> duplicateReports = new java.util.ArrayList<>();
-        
-        // Discard any generated questions that are >30% similar to existing ones
-        for (Question q : generated) {
-            com.quizly.backend.dto.DuplicateCheckResponse duplicateCheck = aiService.checkDuplication(q);
-            if (!duplicateCheck.isDuplicate()) {
-                resolveStackAndTopic(q);
-                uniqueQuestions.add(q);
-            } else {
-                java.util.Map<String, Object> report = new java.util.HashMap<>();
-                report.put("generatedStem", q.getStem());
-                report.put("originalQuestion", q);
-                report.put("conflicts", duplicateCheck.getSimilarQuestions());
-                duplicateReports.add(report);
-            }
-        }
-        
-        if (!uniqueQuestions.isEmpty()) {
-            List<Question> savedQuestions = questionRepository.saveAll(uniqueQuestions);
-            savedQuestions.forEach(aiService::syncQuestionToVectorStore);
-            
+
+        if (generated == null || generated.isEmpty()) {
             java.util.Map<String, Object> response = new java.util.HashMap<>();
-            response.put("saved", savedQuestions);
-            response.put("discardedDuplicates", duplicateReports);
-            response.put("requestedCount", request.getCount());
-            response.put("generatedCount", savedQuestions.size());
-            
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } else {
-            // All generated questions were duplicates
-            java.util.Map<String, Object> response = new java.util.HashMap<>();
-            response.put("error", "Failed to generate some or all questions (they were either invalid or >30% similar to existing database questions).");
-            response.put("discardedDuplicates", duplicateReports);
-            response.put("requestedCount", request.getCount());
+            response.put("error", "AI failed to generate questions. Please try again.");
             response.put("generatedCount", 0);
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
+
+        // Save all generated questions as Draft — they go through SME review before being Approved.
+        // Duplicate check is intentionally skipped here; SMEs will review and discard actual duplicates.
+        for (Question q : generated) {
+            resolveStackAndTopic(q);
+        }
+        List<Question> savedQuestions = questionRepository.saveAll(generated);
+
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("saved", savedQuestions);
+        response.put("requestedCount", request.getCount());
+        response.put("generatedCount", savedQuestions.size());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
+
 
     @PostMapping("/duplicate-check")
     public ResponseEntity<com.quizly.backend.dto.DuplicateCheckResponse> checkDuplication(@RequestBody Question question) {
