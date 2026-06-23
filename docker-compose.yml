@@ -76,6 +76,10 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_SERVER_DOMAIN=qwizly.javascript-dev.com
+      - GF_SERVER_ROOT_URL=https://qwizly.javascript-dev.com/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_SECURITY_ALLOW_EMBEDDING=true
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml

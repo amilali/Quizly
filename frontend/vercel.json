@@ -13,7 +13,11 @@
       "destination": "https://fiber-subwoofer-dwarf.ngrok-free.dev/v1/$1"
     },
     {
-      "source": "/((?!api/|ws/|v1/).*)",
+      "source": "/grafana/(.*)",
+      "destination": "https://fiber-subwoofer-dwarf.ngrok-free.dev/grafana/$1"
+    },
+    {
+      "source": "/((?!api/|ws/|v1/|grafana/).*)",
       "destination": "/index.html"
     }
   ]

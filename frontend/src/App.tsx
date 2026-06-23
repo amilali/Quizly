@@ -7,6 +7,7 @@ import QuizGame from "./pages/QuizGame"
 import PublicGameJoin from "./pages/PublicGameJoin"
 import QuizEventDashboard from "./pages/QuizEventDashboard"
 import QuizEventDetail from "./pages/QuizEventDetail"
+import Analytics from "./pages/Analytics"
 import { motion, AnimatePresence } from "framer-motion"
 import { ThemeProvider } from "./components/theme-provider"
 import { useSelector } from "react-redux"
@@ -58,6 +59,7 @@ function App() {
                         <Route path="/question-bank" element={<QuestionBank />} />
                         <Route path="/events" element={<QuizEventDashboard />} />
                         <Route path="/events/:eventId" element={<QuizEventDetail />} />
+                        <Route path="/analytics" element={<Analytics />} />
                         <Route path="/quiz-game" element={<QuizGame />} />
                       </Routes>
                     </motion.div>

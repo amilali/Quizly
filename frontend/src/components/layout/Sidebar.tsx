@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
-import { FileQuestion, ClipboardCheck, Database, LogOut, MonitorPlay } from "lucide-react"
+import { FileQuestion, ClipboardCheck, Database, LogOut, MonitorPlay, BarChart3 } from "lucide-react"
 import { ThemeToggle } from "../ThemeToggle"
 import { Logo } from "../Logo"
 import { cn } from "@/lib/utils"
@@ -37,6 +37,12 @@ export default function Sidebar() {
       title: "Live Assessment",
       href: "/events",
       icon: MonitorPlay,
+    },
+    {
+      title: "Analytics",
+      href: "/analytics",
+      icon: BarChart3,
+      restrictedRoles: ["Admin", "SME"],
     }
   ]
 
@@ -102,7 +108,7 @@ export default function Sidebar() {
         className="flex-1 px-4 py-6 space-y-2 relative z-10"
       >
         {navItems
-          .filter(item => !item.adminOnly || role === 'Admin')
+          .filter(item => (!item.adminOnly || role === 'Admin') && (!item.restrictedRoles || item.restrictedRoles.includes(role || "")))
           .map((item) => {
           const isActive = location.pathname.includes(item.href)
           
