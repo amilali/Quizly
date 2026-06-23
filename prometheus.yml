@@ -10,14 +10,13 @@ scrape_configs:
   - job_name: 'spring-boot-backend'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['quizly-backend:8081'] # Using docker service name if it matches, wait... backend port is 8081
-        # The container_name in docker-compose is quizly-backend. 
-        # But inside compose network, the service name is 'backend'.
-        # I will use 'backend:8081'
-      - targets: ['host.docker.internal:8081'] # Fallback if running from IDE
+      - targets:
+          - 'backend:8081'            # Docker service name (primary - used inside Docker network)
+          - 'host.docker.internal:8081' # Fallback for local dev outside Docker
 
-  - job_name: 'production-frontend'
+  - job_name: 'spring-boot-backend-production'
     metrics_path: '/actuator/prometheus'
     scheme: https
     static_configs:
-      - targets: ['qwizly.javascript-dev.com']
+      - targets:
+          - 'qwizly.javascript-dev.com' # Production domain proxied via Vercel → Ngrok → Backend
