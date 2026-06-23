@@ -23,7 +23,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from "@/components/ui/dropdown-menu"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, UploadCloud, Edit3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, Loader2, Filter, Sparkles, AlertTriangle, Code, Tag, Gauge, CheckCircle2, Circle } from "lucide-react"
+import { Plus, UploadCloud, Edit3, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, Loader2, Filter, Sparkles, AlertTriangle, Code, Tag, Gauge, CheckCircle2, Circle, X, Zap } from "lucide-react"
 
 export default function MyQuestions() {
   const dispatch = useDispatch<AppDispatch>()
@@ -156,15 +156,15 @@ export default function MyQuestions() {
     setIsGenerating(true);
         try {
       const result = await dispatch(generateQuestionsAi(aiFormData)).unwrap();
-      if (result.discardedDuplicates) {
-        setConflictError({ type: 'ai', details: result });
+      if (result.generatedCount < result.requestedCount) {
+        setConflictError({ type: 'ai_partial', details: result });
       } else {
         setIsAddModalOpen(false);
         setTimeout(() => setAddMode("select"), 300);
       }
         } catch (err: any) {
-      if (err?.error && err?.discardedDuplicates) {
-        setConflictError({ type: 'ai_error', details: err });
+      if (err?.error && err?.generatedCount !== undefined) {
+        setConflictError({ type: 'ai_partial', details: err });
       } else {
         console.error("AI Generation failed", err);
       }
@@ -222,19 +222,6 @@ export default function MyQuestions() {
       setTimeout(() => setAddMode("select"), 300);
     } catch (err) {
       console.error("Failed to override bulk duplicates", err);
-    }
-  }
-
-  const handleOverrideAi = async () => {
-    if (!conflictError?.details?.discardedDuplicates) return;
-    const questionsToOverride = conflictError.details.discardedDuplicates.map((dup: any) => dup.originalQuestion);
-    try {
-      await dispatch(createQuestionsBulk({ questions: questionsToOverride, override: true })).unwrap();
-      setIsAddModalOpen(false);
-      setConflictError(null);
-      setTimeout(() => setAddMode("select"), 300);
-    } catch (err) {
-      console.error("Failed to override AI duplicates", err);
     }
   }
 
@@ -389,61 +376,53 @@ export default function MyQuestions() {
                   </DialogTitle>
                   <p className="text-sm text-muted-foreground mt-1 ml-10">Automatically generate multiple choice questions tailored to your needs.</p>
                 </DialogHeader>
-                {conflictError?.type === 'ai' && (
-                  <div className="bg-yellow-500/10 border border-yellow-500/50 p-5 rounded-2xl text-yellow-700 dark:text-yellow-400 mb-4 shadow-sm max-h-60 overflow-y-auto no-scrollbar">
+                {/* ── PARTIAL SUCCESS OR FAILURE FROM AI ── */}
+                {conflictError?.type === 'ai_partial' && (
+                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 p-4 rounded-xl border border-[#FFA602]/30 bg-[#FFA602]/10 relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#FFA602]/0 via-[#FFA602]/5 to-[#FFA602]/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-in-out" />
                     <div className="flex justify-between items-start mb-2 gap-4">
-                      <h3 className="font-bold flex items-center text-lg"><AlertTriangle className="w-5 h-5 mr-2 shrink-0" /> Partial Generation Completed</h3>
-                      <Button onClick={handleOverrideAi} className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-xl shadow-sm h-8 px-4 text-xs shrink-0 whitespace-nowrap">
-                        Force Save Discarded
+                      <h4 className="text-[#FFA602] font-semibold flex items-center gap-2">
+                        <AlertTriangle className="size-5" /> Partial Success
+                      </h4>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-[#FFA602] hover:bg-[#FFA602]/20 rounded-full" onClick={() => setConflictError(null)}>
+                        <X className="size-4" />
                       </Button>
                     </div>
-                    <p className="text-sm mb-4">We saved {conflictError.details.saved?.length} unique questions, but {conflictError.details.discardedDuplicates?.length} questions were discarded because they were too similar to existing ones.</p>
-                    <details className="group mt-2">
-                      <summary className="text-sm font-bold cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center outline-none hover:text-yellow-900 dark:hover:text-yellow-300 transition-colors">
-                        <ChevronRight className="w-4 h-4 mr-1 transition-transform group-open:rotate-90" />
-                        View Discarded Questions ({conflictError.details.discardedDuplicates?.length})
-                      </summary>
-                      <div className="space-y-3 mt-3">
-                        {conflictError.details.discardedDuplicates?.map((dup: any, i: number) => (
-                          <div key={i} className="bg-background/80 p-4 rounded-xl text-sm border border-yellow-500/20 shadow-inner">
-                            <p className="font-semibold mb-2">Discarded Generated Question:</p>
-                            <p className="text-foreground/80 italic mb-2">"{dup.generatedStem}"</p>
-                            <p className="font-semibold mb-2 text-yellow-800 dark:text-yellow-300">Conflicts With:</p>
-                            <ul className="list-disc pl-5">
-                              {dup.conflicts?.map((c: any) => (
-                                <li key={c.questionId} className="text-yellow-800/80 dark:text-yellow-300/80">ID {c.questionId} ({c.similarityPercentage}% match): {c.stem}</li>
-                              ))}
-                            </ul>
+                    <p className="text-sm mb-4">
+                      Only <strong>{conflictError.details.generatedCount}</strong> out of <strong>{conflictError.details.requestedCount}</strong> requested questions were successfully generated and saved. The AI either failed to format them correctly or they were too similar to existing questions.
+                    </p>
+                    
+                    <div className="flex gap-2 items-center flex-wrap">
+                      {conflictError.details.requestedCount - conflictError.details.generatedCount > 0 && (
+                        <Button 
+                          size="sm" 
+                          className="bg-[#FFA602] hover:bg-[#e09502] text-white" 
+                          onClick={() => {
+                            const missing = conflictError.details.requestedCount - conflictError.details.generatedCount;
+                            setAiFormData(prev => ({ ...prev, count: missing }));
+                            setConflictError(null);
+                            handleGenerateAi();
+                          }}
+                        >
+                          <Zap className="size-4 mr-2" />
+                          Regenerate Remaining {conflictError.details.requestedCount - conflictError.details.generatedCount}
+                        </Button>
+                      )}
+                      
+                      {conflictError.details.discardedDuplicates?.length > 0 && (
+                        <details className="text-xs w-full mt-2">
+                          <summary className="cursor-pointer text-[#FFA602]/80 hover:text-[#FFA602]">
+                            View Discarded Duplicates ({conflictError.details.discardedDuplicates.length})
+                          </summary>
+                          <div className="mt-2 space-y-2 pl-2 border-l-2 border-[#FFA602]/30">
+                            {conflictError.details.discardedDuplicates.map((dup: any, i: number) => (
+                              <p key={i} className="opacity-80">"{dup.generatedStem || dup.originalQuestion?.stem}"</p>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </details>
-                  </div>
-                )}
-                {conflictError?.type === 'ai_error' && (
-                  <div className="bg-red-500/10 border border-red-500/50 p-5 rounded-2xl text-red-700 dark:text-red-400 mb-4 shadow-sm max-h-60 overflow-y-auto no-scrollbar">
-                    <div className="flex justify-between items-start mb-2 gap-4">
-                      <h3 className="font-bold flex items-center text-lg"><AlertTriangle className="w-5 h-5 mr-2 shrink-0" /> Generation Failed</h3>
-                      <Button onClick={handleOverrideAi} className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-sm h-8 px-4 text-xs shrink-0 whitespace-nowrap">
-                        Force Save Discarded
-                      </Button>
+                        </details>
+                      )}
                     </div>
-                    <p className="text-sm mb-4">{conflictError.details.error}</p>
-                    <details className="group mt-2">
-                      <summary className="text-sm font-bold cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center outline-none hover:text-red-900 dark:hover:text-red-300 transition-colors">
-                        <ChevronRight className="w-4 h-4 mr-1 transition-transform group-open:rotate-90" />
-                        View Discarded Questions ({conflictError.details.discardedDuplicates?.length})
-                      </summary>
-                      <div className="space-y-3 mt-3">
-                        {conflictError.details.discardedDuplicates?.map((dup: any, i: number) => (
-                          <div key={i} className="bg-background/80 p-4 rounded-xl text-sm border border-red-500/20 shadow-inner">
-                            <p className="font-semibold mb-2">Discarded Generated Question:</p>
-                            <p className="text-foreground/80 italic mb-2">"{dup.generatedStem}"</p>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  </div>
+                  </motion.div>
                 )}
                 <div className="grid gap-6 mt-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

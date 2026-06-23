@@ -231,20 +231,20 @@ public class QuestionController {
             List<Question> savedQuestions = questionRepository.saveAll(uniqueQuestions);
             savedQuestions.forEach(aiService::syncQuestionToVectorStore);
             
-            // If some were discarded, we might still want to return 201 with a warning
-            if (!duplicateReports.isEmpty()) {
-                 java.util.Map<String, Object> response = new java.util.HashMap<>();
-                 response.put("saved", savedQuestions);
-                 response.put("discardedDuplicates", duplicateReports);
-                 // We return 201 Created but with a complex body so the frontend knows some were discarded
-                 return ResponseEntity.status(HttpStatus.CREATED).body(response);
-            }
-            return ResponseEntity.status(HttpStatus.CREATED).body(savedQuestions);
+            java.util.Map<String, Object> response = new java.util.HashMap<>();
+            response.put("saved", savedQuestions);
+            response.put("discardedDuplicates", duplicateReports);
+            response.put("requestedCount", request.getCount());
+            response.put("generatedCount", savedQuestions.size());
+            
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } else {
             // All generated questions were duplicates
             java.util.Map<String, Object> response = new java.util.HashMap<>();
-            response.put("error", "All generated questions were >30% similar to existing database questions. Please try generating again.");
+            response.put("error", "Failed to generate some or all questions (they were either invalid or >30% similar to existing database questions).");
             response.put("discardedDuplicates", duplicateReports);
+            response.put("requestedCount", request.getCount());
+            response.put("generatedCount", 0);
             return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
         }
     }
