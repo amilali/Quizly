@@ -15,3 +15,9 @@ scrape_configs:
         # But inside compose network, the service name is 'backend'.
         # I will use 'backend:8081'
       - targets: ['host.docker.internal:8081'] # Fallback if running from IDE
+
+  - job_name: 'production-frontend'
+    metrics_path: '/actuator/prometheus'
+    scheme: https
+    static_configs:
+      - targets: ['qwizly.javascript-dev.com']

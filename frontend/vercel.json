@@ -9,6 +9,10 @@
       "destination": "https://fiber-subwoofer-dwarf.ngrok-free.dev/ws/$1"
     },
     {
+      "source": "/actuator/(.*)",
+      "destination": "https://fiber-subwoofer-dwarf.ngrok-free.dev/actuator/$1"
+    },
+    {
       "source": "/v1/(.*)",
       "destination": "https://fiber-subwoofer-dwarf.ngrok-free.dev/v1/$1"
     },
