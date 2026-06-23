@@ -1,13 +1,16 @@
 package com.quizly.backend.service;
 
+import com.quizly.backend.model.GameAnswer;
 import com.quizly.backend.model.GameSession;
 import com.quizly.backend.model.Question;
+import com.quizly.backend.repository.GameAnswerRepository;
 import com.quizly.backend.repository.QuestionRepository;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
@@ -36,12 +39,14 @@ public class GameService {
 
     private final com.quizly.backend.repository.EventQuestionRepository eventQuestionRepository;
     private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
+    private final GameAnswerRepository gameAnswerRepository;
 
-    public GameService(QuestionRepository questionRepository, com.quizly.backend.repository.EventQuestionRepository eventQuestionRepository, SimpMessagingTemplate messagingTemplate, io.micrometer.core.instrument.MeterRegistry meterRegistry) {
+    public GameService(QuestionRepository questionRepository, com.quizly.backend.repository.EventQuestionRepository eventQuestionRepository, SimpMessagingTemplate messagingTemplate, io.micrometer.core.instrument.MeterRegistry meterRegistry, GameAnswerRepository gameAnswerRepository) {
         this.questionRepository = questionRepository;
         this.eventQuestionRepository = eventQuestionRepository;
         this.messagingTemplate = messagingTemplate;
         this.meterRegistry = meterRegistry;
+        this.gameAnswerRepository = gameAnswerRepository;
     }
 
     public Map<String, Object> createGame(String hostId, String stack, String topic, int questionCount, long timeLimitMs) {
@@ -145,19 +150,44 @@ public class GameService {
             correctIndex = getCorrectOptionIndex(questionOpt.get().getCorrectAnswer());
         }
         boolean isCorrect = (selectedOption == correctIndex);
-
-        // Record business analytics metrics for answers
-        meterRegistry.counter("quizly.answers", 
-            "status", isCorrect ? "correct" : "incorrect",
-            "player", playerName != null ? playerName : "unknown"
-        ).increment();
+        long elapsed = System.currentTimeMillis() - session.getQuestionStartTime();
 
         int pointsAwarded = 0;
         if (isCorrect) {
-            long elapsed = System.currentTimeMillis() - session.getQuestionStartTime();
             double timeRatio = Math.max(0, 1.0 - (double) elapsed / session.getTimeLimitMs());
             pointsAwarded = (int) (MAX_POINTS * (0.5 + 0.5 * timeRatio)); // 500-1000 pts
         }
+
+        // Persist answer to DB for analytics
+        try {
+            GameAnswer record = new GameAnswer();
+            record.setPin(pin);
+            record.setPlayerName(playerName != null ? playerName : "unknown");
+            record.setQuestionId(questionId);
+            record.setSelectedOption(selectedOption);
+            record.setCorrect(isCorrect);
+            record.setPointsAwarded(pointsAwarded);
+            record.setTimeTakenMs(elapsed);
+            record.setAnsweredAt(Instant.now());
+
+            // Enrich with question metadata
+            if (!session.isEventBased()) {
+                questionRepository.findById(questionId).ifPresent(q -> {
+                    record.setQuestionStem(q.getStem());
+                    record.setQuestionStack(q.getStack());
+                    record.setQuestionTopic(q.getTopic());
+                });
+            }
+            gameAnswerRepository.save(record);
+        } catch (Exception e) {
+            System.err.println("Failed to persist game answer: " + e.getMessage());
+        }
+
+        // Micrometer metrics (kept for backwards compat)
+        meterRegistry.counter("quizly.answers",
+            "status", isCorrect ? "correct" : "incorrect",
+            "player", playerName != null ? playerName : "unknown"
+        ).increment();
 
         session.getAnsweredThisRound().put(playerName, true);
         if (isCorrect) {

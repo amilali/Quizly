@@ -38,6 +38,7 @@ public class SecurityConfig {
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/api/game/join").permitAll()
                         .requestMatchers("/api/game/*/status").permitAll()
+                        .requestMatchers("/api/analytics/**").authenticated()
                         .requestMatchers("/").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
