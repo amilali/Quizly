@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useSelector } from "react-redux";
 import type { RootState } from "../store";
+import { useTheme } from "@/components/theme-provider";
 
 export default function Analytics() {
   const role = useSelector((state: RootState) => state.auth.role);
@@ -14,17 +15,24 @@ export default function Analytics() {
     );
   }
 
+  const { theme } = useTheme();
+
+  // Resolve system theme to either "dark" or "light"
+  const actualTheme = theme === "system" 
+    ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+    : theme;
+
   // Uses the relative path which will be proxied by Vercel/Nginx to the Grafana instance
-  // theme=dark ensures it matches the Quizly UI
-  // kiosk=tv hides the Grafana sidebars and top navigation to make it look native
-  const grafanaUrl = "/grafana/d/spring_boot_21/spring-boot-3-x-statistics?orgId=1&theme=dark&kiosk=tv";
+  // theme dynamically matches the Quizly UI
+  // kiosk completely hides all Grafana UI elements (sidebar, topbar, dashboard header)
+  const grafanaUrl = `/grafana/d/user_analytics/quizly-user-analytics?orgId=1&theme=${actualTheme}&kiosk`;
 
   return (
     <div className="space-y-6 h-full flex flex-col">
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl sm:text-4xl font-black mb-2 tracking-tight">System <span className="text-primary">Analytics</span></h1>
+        <h1 className="text-3xl sm:text-4xl font-black mb-2 tracking-tight">Player <span className="text-primary">Analytics</span></h1>
         <p className="text-muted-foreground text-sm sm:text-base">
-          Real-time performance and system metrics.
+          Real-time metrics on player performance, accuracy, and engagement.
         </p>
       </motion.div>
 
@@ -32,11 +40,11 @@ export default function Analytics() {
         initial={{ opacity: 0, scale: 0.98 }} 
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.1 }}
-        className="flex-1 w-full min-h-[600px] sm:min-h-[800px] rounded-xl border border-border/50 overflow-hidden bg-card/50 shadow-xl"
+        className="flex-1 w-full min-h-[600px] sm:min-h-[800px] flex flex-col rounded-xl border border-border/50 overflow-hidden bg-card/50 shadow-xl"
       >
         <iframe 
           src={grafanaUrl} 
-          className="w-full h-full border-none"
+          className="w-full flex-1 border-none"
           title="Grafana Analytics Dashboard"
           allowFullScreen
         />

@@ -35,11 +35,13 @@ public class GameService {
     private static final int MAX_POINTS = 1000;
 
     private final com.quizly.backend.repository.EventQuestionRepository eventQuestionRepository;
+    private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
-    public GameService(QuestionRepository questionRepository, com.quizly.backend.repository.EventQuestionRepository eventQuestionRepository, SimpMessagingTemplate messagingTemplate) {
+    public GameService(QuestionRepository questionRepository, com.quizly.backend.repository.EventQuestionRepository eventQuestionRepository, SimpMessagingTemplate messagingTemplate, io.micrometer.core.instrument.MeterRegistry meterRegistry) {
         this.questionRepository = questionRepository;
         this.eventQuestionRepository = eventQuestionRepository;
         this.messagingTemplate = messagingTemplate;
+        this.meterRegistry = meterRegistry;
     }
 
     public Map<String, Object> createGame(String hostId, String stack, String topic, int questionCount, long timeLimitMs) {
@@ -113,6 +115,9 @@ public class GameService {
         session.setStatus(GameSession.Status.ACTIVE);
         broadcastStatusUpdate(session, "STARTED");
         
+        // Record business analytics metrics
+        meterRegistry.counter("quizly.game.started").increment();
+        
         // Wait 3 seconds to allow frontend to show a 3-2-1 animated countdown
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try { Thread.sleep(3000); } catch (InterruptedException e) {}
@@ -139,7 +144,10 @@ public class GameService {
             if (questionOpt.isEmpty()) return;
             correctIndex = getCorrectOptionIndex(questionOpt.get().getCorrectAnswer());
         }
-        boolean isCorrect = selectedOption == correctIndex;
+        boolean isCorrect = (selectedOption == correctIndex);
+
+        // Record business analytics metrics for answers
+        meterRegistry.counter("quizly.answers", "status", isCorrect ? "correct" : "incorrect").increment();
 
         int pointsAwarded = 0;
         if (isCorrect) {
