@@ -75,8 +75,30 @@ docker-compose up -d --build backend
 docker logs -f quizly-backend
 ```
 
+### Accessing the Database (Docker)
+Because the database runs inside Docker on port `5433` (to avoid conflicts), you access it differently than a standard local install.
+
+**Option 1: Terminal (Fastest)**
+Drop directly into the Postgres console inside the container:
+```bash
+docker exec -it quizly-db psql -U postgres -d quizly
+```
+*(Type `\q` to exit).*
+
+**Option 2: GUI Tool (DBeaver, pgAdmin, VS Code)**
+Connect using these credentials:
+- **Host:** `localhost`
+- **Port:** `5433`
+- **Database:** `quizly`
+- **Username:** `postgres`
+- **Password:** `password`
+
 > **Note on Environment Variables:** You must create a `.env` file inside the `backend/` directory with your Azure OpenAI keys. The Docker Compose file is configured to automatically read them from `backend/.env`.
 
+TRUNCATE TABLE questions RESTART IDENTITY CASCADE;
+
+-- to truncate the table
+\q => quit
 ---
 
 ## 4. Frontend Setup (React/Vite)
