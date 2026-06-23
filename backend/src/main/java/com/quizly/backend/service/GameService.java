@@ -190,6 +190,7 @@ public class GameService {
         ).increment();
 
         session.getAnsweredThisRound().put(playerName, true);
+        session.getCurrentAnswerStats().merge(selectedOption, 1, Integer::sum);
         if (isCorrect) {
             session.getPlayerScores().merge(playerName, pointsAwarded, Integer::sum);
         }
@@ -271,6 +272,7 @@ public class GameService {
                 Map<String, Object> payload = new HashMap<>();
                 payload.put("type", "SHOW_ANSWER");
                 payload.put("correctOption", getCorrectOptionIndex(q.getCorrectAnswer()));
+                payload.put("answerStats", session.getCurrentAnswerStats());
                 messagingTemplate.convertAndSend("/topic/game/" + pin + "/events", payload);
             });
         } else {
@@ -278,6 +280,7 @@ public class GameService {
                 Map<String, Object> payload = new HashMap<>();
                 payload.put("type", "SHOW_ANSWER");
                 payload.put("correctOption", getCorrectOptionIndex(q.getCorrectAnswer()));
+                payload.put("answerStats", session.getCurrentAnswerStats());
                 messagingTemplate.convertAndSend("/topic/game/" + pin + "/events", payload);
             });
         }

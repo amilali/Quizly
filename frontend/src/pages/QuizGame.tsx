@@ -77,6 +77,7 @@ export default function QuizGame() {
   const [answerResult, setAnswerResult] = useState<{ isCorrect: boolean; pointsAwarded: number; correctOption: number; totalScore: number } | null>(null)
   const [timeLeft, setTimeLeft] = useState(30)
   const [correctOption, setCorrectOption] = useState<number | null>(null)
+  const [answerStats, setAnswerStats] = useState<Record<string, number>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -106,6 +107,7 @@ export default function QuizGame() {
         break
       case "SHOW_ANSWER":
         setCorrectOption(data.correctOption)
+        if (data.answerStats) setAnswerStats(data.answerStats)
         setPhase("answer_reveal")
         clearTimer()
         break
@@ -451,10 +453,10 @@ export default function QuizGame() {
                   <motion.button
                     key={idx}
                     onClick={() => handleSelectOption(idx)}
-                    disabled={hasAnswered || timeLeft === 0}
-                    whileHover={!hasAnswered ? { scale: 1.02 } : {}}
-                    whileTap={!hasAnswered ? { scale: 0.98 } : {}}
-                    className={`relative p-6 rounded-2xl text-white font-bold text-left flex items-center gap-4 transition-all shadow-lg ${style.bg} ${!hasAnswered && timeLeft > 0 ? style.hover + " cursor-pointer" : ""} ${isSelected ? "ring-4 ring-white/50 scale-105" : ""} ${hasAnswered && !isSelected ? "opacity-60" : ""}`}
+                    disabled={isHost || hasAnswered || timeLeft === 0}
+                    whileHover={!isHost && !hasAnswered ? { scale: 1.02 } : {}}
+                    whileTap={!isHost && !hasAnswered ? { scale: 0.98 } : {}}
+                    className={`relative p-6 rounded-2xl text-white font-bold text-left flex items-center gap-4 transition-all shadow-lg ${style.bg} ${!isHost && !hasAnswered && timeLeft > 0 ? style.hover + " cursor-pointer" : isHost ? "cursor-default" : ""} ${isSelected ? "ring-4 ring-white/50 scale-105" : ""} ${hasAnswered && !isSelected ? "opacity-60" : ""}`}
                   >
                     <span className="text-2xl shrink-0">{style.icon}</span>
                     <span className="text-base leading-snug">{opt}</span>
@@ -504,19 +506,40 @@ export default function QuizGame() {
             <div className="p-6 rounded-3xl bg-card/70 backdrop-blur-xl border border-border/50">
               <p className="text-lg font-bold text-foreground mb-4">{currentQuestion.stem}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {currentQuestion.options.map((opt, idx) => {
-                  const style = OPTION_STYLES[idx]
-                  const isCorrect = idx === correctOption
-                  const isMyAnswer = selectedOption === idx
-                  return (
-                    <div key={idx} className={`p-5 rounded-2xl flex items-center gap-4 font-bold text-white transition-all ${style.bg} ${!isCorrect ? "opacity-40" : "ring-4 ring-white/60 scale-[1.02] shadow-xl"}`}>
-                      <span className="text-xl">{style.icon}</span>
-                      <span className="flex-1">{opt}</span>
-                      {isCorrect && <Check className="w-5 h-5 shrink-0" />}
-                      {isMyAnswer && !isCorrect && <X className="w-5 h-5 shrink-0" />}
-                    </div>
-                  )
-                })}
+                {isHost ? (
+                  // Host sees the stats for each option
+                  currentQuestion.options.map((opt, idx) => {
+                    const style = OPTION_STYLES[idx]
+                    const isCorrect = idx === correctOption
+                    const count = answerStats[idx] || 0
+                    return (
+                      <div key={idx} className={`p-4 rounded-2xl flex items-center gap-4 font-bold text-white transition-all ${style.bg} ${!isCorrect ? "opacity-40" : "ring-4 ring-white/60 scale-[1.02] shadow-xl"}`}>
+                        <div className="flex flex-col items-center justify-center min-w-[50px] pr-4 border-r border-white/20">
+                          <span className="text-3xl">{count}</span>
+                          <span className="text-xs opacity-80 uppercase tracking-widest mt-1">Votes</span>
+                        </div>
+                        <span className="text-xl">{style.icon}</span>
+                        <span className="flex-1">{opt}</span>
+                        {isCorrect && <Check className="w-6 h-6 shrink-0" />}
+                      </div>
+                    )
+                  })
+                ) : (
+                  // Players see their own answer and the correct answer
+                  currentQuestion.options.map((opt, idx) => {
+                    const style = OPTION_STYLES[idx]
+                    const isCorrect = idx === correctOption
+                    const isMyAnswer = selectedOption === idx
+                    return (
+                      <div key={idx} className={`p-5 rounded-2xl flex items-center gap-4 font-bold text-white transition-all ${style.bg} ${!isCorrect ? "opacity-40" : "ring-4 ring-white/60 scale-[1.02] shadow-xl"}`}>
+                        <span className="text-xl">{style.icon}</span>
+                        <span className="flex-1">{opt}</span>
+                        {isCorrect && <Check className="w-5 h-5 shrink-0" />}
+                        {isMyAnswer && !isCorrect && <X className="w-5 h-5 shrink-0" />}
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </div>
 

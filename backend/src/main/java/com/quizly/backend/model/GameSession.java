@@ -17,6 +17,8 @@ public class GameSession {
     private Map<String, Integer> playerScores;
     // playerName -> answeredCurrentQuestion
     private Map<String, Boolean> answeredThisRound;
+    // optionIndex -> count
+    private Map<Integer, Integer> currentAnswerStats;
     // Time when current question was sent (epoch millis)
     private long questionStartTime;
     private long timeLimitMs;
@@ -31,6 +33,7 @@ public class GameSession {
         this.questionIndex = 0;
         this.playerScores = new ConcurrentHashMap<>();
         this.answeredThisRound = new ConcurrentHashMap<>();
+        this.currentAnswerStats = new ConcurrentHashMap<>();
     }
 
     public String getPin() { return pin; }
@@ -42,6 +45,7 @@ public class GameSession {
     public List<Long> getQuestionIds() { return questionIds; }
     public Map<String, Integer> getPlayerScores() { return playerScores; }
     public Map<String, Boolean> getAnsweredThisRound() { return answeredThisRound; }
+    public Map<Integer, Integer> getCurrentAnswerStats() { return currentAnswerStats; }
     public long getQuestionStartTime() { return questionStartTime; }
     public void setQuestionStartTime(long questionStartTime) { this.questionStartTime = questionStartTime; }
     public long getTimeLimitMs() { return timeLimitMs; }
@@ -54,6 +58,7 @@ public class GameSession {
 
     public void resetAnsweredThisRound() {
         answeredThisRound.replaceAll((k, v) -> false);
+        currentAnswerStats.clear();
     }
 
     public boolean hasCurrentQuestion() {
