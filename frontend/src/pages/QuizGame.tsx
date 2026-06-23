@@ -228,7 +228,7 @@ export default function QuizGame() {
   }
 
   const handleSelectOption = (idx: number) => {
-    if (selectedOption !== null || !currentQuestion) return
+    if (isHost || selectedOption !== null || !currentQuestion) return
     setSelectedOption(idx)
     sendAnswer(currentQuestion.questionId, idx)
   }
@@ -490,18 +490,20 @@ export default function QuizGame() {
         {/* ── ANSWER REVEAL ── */}
         {phase === "answer_reveal" && currentQuestion && correctOption !== null && (
           <motion.div key="reveal" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="space-y-5 max-w-4xl">
-            <div className="text-center">
-              <motion.div initial={{ scale: 0.5 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300 }}>
-                {answerResult?.isCorrect
-                  ? <div className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-green-500/20 text-green-500 border border-green-500/40 font-black text-2xl shadow-lg shadow-green-500/20">
-                    <Zap className="w-6 h-6" /> Correct! +{answerResult.pointsAwarded} pts
-                  </div>
-                  : <div className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-red-500/20 text-red-500 border border-red-500/40 font-black text-2xl shadow-lg shadow-red-500/20">
-                    <X className="w-6 h-6" /> Incorrect
-                  </div>
-                }
-              </motion.div>
-            </div>
+            {!isHost && (
+              <div className="text-center">
+                <motion.div initial={{ scale: 0.5 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300 }}>
+                  {answerResult?.isCorrect
+                    ? <div className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-green-500/20 text-green-500 border border-green-500/40 font-black text-2xl shadow-lg shadow-green-500/20">
+                      <Zap className="w-6 h-6" /> Correct! +{answerResult.pointsAwarded} pts
+                    </div>
+                    : <div className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-red-500/20 text-red-500 border border-red-500/40 font-black text-2xl shadow-lg shadow-red-500/20">
+                      <X className="w-6 h-6" /> Incorrect
+                    </div>
+                  }
+                </motion.div>
+              </div>
+            )}
 
             <div className="p-6 rounded-3xl bg-card/70 backdrop-blur-xl border border-border/50">
               <p className="text-lg font-bold text-foreground mb-4">{currentQuestion.stem}</p>
