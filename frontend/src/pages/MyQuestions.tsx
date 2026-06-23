@@ -494,18 +494,20 @@ export default function MyQuestions() {
                   
                   <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-border/30">
                     <Button variant="ghost" onClick={() => setIsAddModalOpen(false)} className="rounded-xl font-bold py-6 px-6">Cancel</Button>
-                    <Button 
+                    <button 
                       onClick={handleGenerateAi} 
                       disabled={isGenerating || !aiFormData.stack || !aiFormData.topic} 
-                      className="relative overflow-hidden rounded-xl font-bold bg-primary text-white hover:bg-primary/90 py-6 px-8 shadow-md transition-all"
+                      className="relative group overflow-hidden rounded-xl p-[2px] font-bold shadow-2xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
                     >
-                      {isGenerating && (
-                        <div className="absolute inset-0 w-full h-full animate-[shimmer_1.5s_infinite_linear] bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full" />
-                      )}
-                      <div className="relative z-10 flex items-center">
-                        {isGenerating ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Generating...</> : <><Sparkles className="w-5 h-5 mr-2" /> Generate Questions</>}
+                      <span className="absolute inset-[-1000%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#a855f7_0%,#3b82f6_50%,#ec4899_100%)] opacity-70 group-hover:opacity-100 transition-opacity duration-500" />
+                      <div className="absolute inset-0 bg-[conic-gradient(from_90deg_at_50%_50%,#a855f7_0%,#3b82f6_50%,#ec4899_100%)] opacity-20 blur-xl group-hover:opacity-40 transition-opacity duration-500 animate-[spin_3s_linear_infinite]" />
+                      <div className="relative z-10 flex h-full w-full items-center justify-center rounded-[10px] bg-slate-950 px-8 py-3.5 text-sm font-semibold text-white backdrop-blur-3xl gap-2 transition-colors group-hover:bg-slate-900">
+                        {isGenerating && (
+                          <div className="absolute inset-0 w-full h-full animate-[shimmer_1.5s_infinite_linear] bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full rounded-[10px]" />
+                        )}
+                        {isGenerating ? <><Loader2 className="w-5 h-5 animate-spin relative z-20 text-blue-400" /> <span className="relative z-20">Generating...</span></> : <><Sparkles className="w-5 h-5 relative z-20 text-purple-400" /> <span className="relative z-20">Generate Questions</span></>}
                       </div>
-                    </Button>
+                    </button>
                   </div>
                 </div>
               </>

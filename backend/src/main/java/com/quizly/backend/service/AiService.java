@@ -21,17 +21,22 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.document.Document;
 
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.Span;
+
 @Service
 public class AiService {
 
     private final QuestionRepository questionRepository;
     private final ChatModel chatModel;
     private final VectorStore vectorStore;
+    private final Tracer tracer;
 
-    public AiService(QuestionRepository questionRepository, ChatModel chatModel, VectorStore vectorStore) {
+    public AiService(QuestionRepository questionRepository, ChatModel chatModel, VectorStore vectorStore, Tracer tracer) {
         this.questionRepository = questionRepository;
         this.chatModel = chatModel;
         this.vectorStore = vectorStore;
+        this.tracer = tracer;
     }
 
     @PostConstruct
@@ -61,97 +66,112 @@ public class AiService {
     }
 
     public List<Question> generateQuestions(GenerateRequest request, String creatorId) {
-        List<Question> generatedQuestions = new ArrayList<>();
-        int targetCount = request.getCount();
-        
-        for (int i = 0; i < targetCount; i++) {
-            Question newQuestion = generateSingleQuestion(request.getStack(), request.getTopic(), request.getDifficulty(), request.getAvoidStems());
-            newQuestion.setCreatorId(creatorId);
-            newQuestion.setStatus("Draft");
+        Span span = tracer.nextSpan().name("ai_generate_questions").start();
+        try (Tracer.SpanInScope ws = tracer.withSpan(span)) {
+            span.tag("quizly.request.count", String.valueOf(request.getCount()));
+            span.tag("quizly.request.topic", request.getTopic() != null ? request.getTopic() : "unknown");
             
-            // Auto-duplication check: replace if similarity >= 30%
-            int maxRetries = 3;
-            int attempts = 0;
-            boolean isValid = false;
+            List<Question> generatedQuestions = new ArrayList<>();
+            int targetCount = request.getCount();
             
-            while (attempts < maxRetries && !isValid) {
-                DuplicateCheckResponse checkResponse = checkDuplication(newQuestion);
-                if (checkResponse.isDuplicate()) {
-                    attempts++;
-                    newQuestion = generateSingleQuestion(request.getStack(), request.getTopic(), request.getDifficulty(), request.getAvoidStems());
-                    newQuestion.setCreatorId(creatorId);
-                    newQuestion.setStatus("Draft");
-                } else {
-                    isValid = true;
+            for (int i = 0; i < targetCount; i++) {
+                Question newQuestion = generateSingleQuestion(request.getStack(), request.getTopic(), request.getDifficulty(), request.getAvoidStems());
+                newQuestion.setCreatorId(creatorId);
+                newQuestion.setStatus("Draft");
+                
+                // Auto-duplication check: replace if similarity >= 30%
+                int maxRetries = 3;
+                int attempts = 0;
+                boolean isValid = false;
+                
+                while (attempts < maxRetries && !isValid) {
+                    DuplicateCheckResponse checkResponse = checkDuplication(newQuestion);
+                    if (checkResponse.isDuplicate()) {
+                        attempts++;
+                        span.event("duplicate_detected_retrying");
+                        newQuestion = generateSingleQuestion(request.getStack(), request.getTopic(), request.getDifficulty(), request.getAvoidStems());
+                        newQuestion.setCreatorId(creatorId);
+                        newQuestion.setStatus("Draft");
+                    } else {
+                        isValid = true;
+                    }
                 }
+                
+                generatedQuestions.add(newQuestion);
             }
             
-            generatedQuestions.add(newQuestion);
+            return generatedQuestions;
+        } finally {
+            span.end();
         }
-        
-        return generatedQuestions;
     }
 
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
     private Question generateSingleQuestion(String stack, String topic, String difficulty, java.util.List<String> avoidStems) {
-        Question q = new Question();
-        q.setStack(stack);
-        q.setTopic(topic);
-        q.setDifficulty(difficulty);
+        Span span = tracer.nextSpan().name("openai_generate_single_question").start();
+        try (Tracer.SpanInScope ws = tracer.withSpan(span)) {
+            Question q = new Question();
+            q.setStack(stack);
+            q.setTopic(topic);
+            q.setDifficulty(difficulty);
         
-        String avoidInstruction = "";
-        if (avoidStems != null && !avoidStems.isEmpty()) {
-            avoidInstruction = "IMPORTANT: You MUST ensure the generated question is completely distinct and less than 30% similar to the following questions: " + String.join(" | ", avoidStems) + ". ";
-        }
-        
-        try {
-            org.springframework.ai.converter.BeanOutputConverter<com.quizly.backend.dto.AiQuestionResponse> converter = 
-                new org.springframework.ai.converter.BeanOutputConverter<>(com.quizly.backend.dto.AiQuestionResponse.class);
-            
-            String promptText = """
-                Generate a {difficulty} difficulty multiple choice question about {topic} in {stack}.
-                {avoidInstruction}
-                
-                GUARDRAILS:
-                1. Ensure the question is factually correct and unambiguous.
-                2. Provide exactly 4 distinct and plausible options.
-                3. Do NOT use generic options like 'Option A', 'Option B', or 'None of the above'.
-                4. Specify the correctOption as a 0-based index.
-                
-                {format}
-                """;
-                
-            org.springframework.ai.chat.prompt.PromptTemplate promptTemplate = new org.springframework.ai.chat.prompt.PromptTemplate(promptText);
-            org.springframework.ai.chat.prompt.Prompt prompt = promptTemplate.create(Map.of(
-                "difficulty", difficulty,
-                "topic", topic,
-                "stack", stack,
-                "avoidInstruction", avoidInstruction,
-                "format", converter.getFormat()
-            ));
-            
-            String response = chatModel.call(prompt).getResult().getOutput().getText();
-            com.quizly.backend.dto.AiQuestionResponse aiQuestion = converter.convert(response);
-            
-            if (aiQuestion != null) {
-                q.setStem(aiQuestion.getStem());
-                q.setOptions(aiQuestion.getOptions());
-                q.setCorrectOption(aiQuestion.getCorrectOption());
-            } else {
-                throw new RuntimeException("AI response parsed to null");
+
+            String avoidInstruction = "";
+            if (avoidStems != null && !avoidStems.isEmpty()) {
+                avoidInstruction = "IMPORTANT: You MUST ensure the generated question is completely distinct and less than 30% similar to the following questions: " + String.join(" | ", avoidStems) + ". ";
             }
-            
-        } catch (Exception e) {
-            // Fallback to mock generation if API key is placeholder or call fails
-            System.err.println("AI Generation failed: " + e.getMessage());
-            e.printStackTrace();
-            q.setStem("Generated " + difficulty + " question about " + topic + " in " + stack + " " + System.currentTimeMillis());
-            q.setOptions(Arrays.asList("Option A", "Option B", "Option C", "Option D"));
-            q.setCorrectOption(0);
-        }
         
-        return q;
+            try {
+                org.springframework.ai.converter.BeanOutputConverter<com.quizly.backend.dto.AiQuestionResponse> converter = 
+                    new org.springframework.ai.converter.BeanOutputConverter<>(com.quizly.backend.dto.AiQuestionResponse.class);
+                
+                String promptText = """
+                    Generate a {difficulty} difficulty multiple choice question about {topic} in {stack}.
+                    {avoidInstruction}
+                    
+                    GUARDRAILS:
+                    1. Ensure the question is factually correct and unambiguous.
+                    2. Provide exactly 4 distinct and plausible options.
+                    3. Do NOT use generic options like 'Option A', 'Option B', or 'None of the above'.
+                    4. Specify the correctOption as a 0-based index.
+                    
+                    {format}
+                    """;
+                    
+                org.springframework.ai.chat.prompt.PromptTemplate promptTemplate = new org.springframework.ai.chat.prompt.PromptTemplate(promptText);
+                org.springframework.ai.chat.prompt.Prompt prompt = promptTemplate.create(Map.of(
+                    "difficulty", difficulty,
+                    "topic", topic,
+                    "stack", stack,
+                    "avoidInstruction", avoidInstruction,
+                    "format", converter.getFormat()
+                ));
+            
+                var response = chatModel.call(prompt);
+                String rawJson = response.getResult().getOutput().getText();
+                // Clean up the response if it contains markdown formatting
+                rawJson = rawJson.replaceAll("```json", "").replaceAll("```", "").trim();
+                
+                Question parsed = objectMapper.readValue(rawJson, Question.class);
+                q.setStem(parsed.getStem());
+                q.setOptions(parsed.getOptions());
+                q.setCorrectOption(parsed.getCorrectOption());
+                span.tag("quizly.generation.status", "success");
+            } catch (Exception e) {
+                span.tag("quizly.generation.status", "error");
+                span.error(e);
+                System.err.println("Failed to parse generated question: " + e.getMessage());
+                // Fallback for demo purposes
+                q.setStem("What is a core feature of " + (topic != null ? topic : "this technology") + "?");
+                q.setOptions(Arrays.asList("Feature A", "Feature B", "Feature C", "Feature D"));
+                q.setCorrectOption(0);
+            }
+
+            return q;
+        } finally {
+            span.end();
+        }
     }
 
     @Async

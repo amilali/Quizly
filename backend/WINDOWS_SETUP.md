@@ -196,3 +196,5 @@ If another application (or a previously hung Java process) is using port `8081`,
   ```powershell
   Stop-Process -Id (Get-NetTCPConnection -LocalPort 8081).OwningProcess -Force
   ```
+
+docker compose up -d

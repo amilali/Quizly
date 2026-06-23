@@ -49,15 +49,33 @@ The Java backend runs on port **8081** and handles the API and database connecti
 
 ## 3. Alternative: Running Backend & Database with Docker
 
-If you have Docker installed, you can spin up the PostgreSQL database and the Spring Boot backend with a single command from the project root directory:
+If you have Docker Desktop installed, you can spin up the PostgreSQL database (`pgvector`), the Java backend, and the monitoring stack (Grafana, Prometheus, Tempo) automatically.
 
-1. Ensure Docker is running.
-2. Set your `OPENAI_API_KEY` in your terminal session.
-3. Run the following command:
-   ```bash
-   docker compose up --build
-   ```
-This will automatically launch the PostgreSQL database, wait for it to be healthy, build the Spring Boot app, and run the backend on port `8081`.
+### Common Docker Commands
+Run these from the project root directory:
+
+**Start Everything:**
+```bash
+docker-compose up -d
+```
+
+**Stop Everything Cleanly:**
+```bash
+docker-compose down
+```
+
+**Rebuild and Restart Backend Only:**
+*(Use this if you modify the backend Java code)*
+```bash
+docker-compose up -d --build backend
+```
+
+**View Backend Logs:**
+```bash
+docker logs -f quizly-backend
+```
+
+> **Note on Environment Variables:** You must create a `.env` file inside the `backend/` directory with your Azure OpenAI keys. The Docker Compose file is configured to automatically read them from `backend/.env`.
 
 ---
 

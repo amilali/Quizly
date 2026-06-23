@@ -33,7 +33,7 @@ const EMOJIS = [
 ]
 
 export default function PublicGameJoin() {
-  const [pin, setPin] = useState("")
+  const [pin, setPin] = useState(() => new URLSearchParams(window.location.search).get("pin") || "")
   const [nickname, setNickname] = useState("")
   const [phase, setPhase] = useState<Phase>("join")
   const [selectedEmoji, setSelectedEmoji] = useState(EMOJIS[Math.floor(Math.random() * EMOJIS.length)])
