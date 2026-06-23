@@ -5,6 +5,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { ArrowLeft, Edit, Trash2, Plus, Copy, CheckCheck, Check, MonitorPlay } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
 import EventQuestionEditor, { type EventQuestion } from "../components/EventQuestionEditor"
+import DeleteConfirmModal from "../components/DeleteConfirmModal"
 
 interface QuizEvent {
   id: number
@@ -28,6 +29,9 @@ export default function QuizEventDetail() {
   const [sessionActive, setSessionActive] = useState(() => localStorage.getItem(`session_active_${eventId}`) === 'true')
   
   const [isEditingEvent, setIsEditingEvent] = useState(false)
+  const [deleteModal, setDeleteModal] = useState<{ open: boolean; questionId: number | null }>({
+    open: false, questionId: null
+  })
   const [editEventName, setEditEventName] = useState("")
   
   // Auto-pull modal
@@ -99,7 +103,13 @@ export default function QuizEventDetail() {
   }
 
   const handleDeleteQuestion = async (questionId: number) => {
-    if (!confirm("Delete this question?")) return
+    setDeleteModal({ open: true, questionId })
+  }
+
+  const confirmDeleteQuestion = async () => {
+    const questionId = deleteModal.questionId
+    setDeleteModal({ open: false, questionId: null })
+    if (!questionId) return
     try {
       await fetch(`/api/events/${eventId}/questions/${questionId}`, {
         method: "DELETE",
@@ -443,6 +453,15 @@ export default function QuizEventDetail() {
           </motion.div>
         </div>
       )}
+
+      <DeleteConfirmModal
+        open={deleteModal.open}
+        title="Delete Question"
+        description="Are you sure you want to remove this question from the event? This action cannot be undone."
+        confirmLabel="Delete Question"
+        onConfirm={confirmDeleteQuestion}
+        onCancel={() => setDeleteModal({ open: false, questionId: null })}
+      />
     </div>
   )
 }

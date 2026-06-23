@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Plus, Trash2, MonitorPlay, Calendar, Clock, ArrowRight } from "lucide-react"
 import { useNavigate } from "react-router-dom"
+import DeleteConfirmModal from "../components/DeleteConfirmModal"
 
 
 interface QuizEvent {
@@ -18,6 +19,9 @@ export default function QuizEventDashboard() {
   const [showModal, setShowModal] = useState(false)
   const [newEventName, setNewEventName] = useState("")
   const [newTimeLimit, setNewTimeLimit] = useState(30)
+  const [deleteModal, setDeleteModal] = useState<{ open: boolean; eventId: number | null }>({
+    open: false, eventId: null
+  })
   
   const navigate = useNavigate()
   const token = localStorage.getItem("token")
@@ -63,8 +67,14 @@ export default function QuizEventDashboard() {
     }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this event?")) return
+  const handleDelete = (id: number) => {
+    setDeleteModal({ open: true, eventId: id })
+  }
+
+  const confirmDelete = async () => {
+    const id = deleteModal.eventId
+    setDeleteModal({ open: false, eventId: null })
+    if (!id) return
     try {
       const res = await fetch(`/api/events/${id}`, {
         method: "DELETE",
@@ -209,6 +219,15 @@ export default function QuizEventDashboard() {
           </motion.div>
         </div>
       )}
+
+      <DeleteConfirmModal
+        open={deleteModal.open}
+        title="Delete Event"
+        description="Are you sure you want to delete this event and all its questions? This action cannot be undone."
+        confirmLabel="Delete Event"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteModal({ open: false, eventId: null })}
+      />
     </div>
   )
 }
