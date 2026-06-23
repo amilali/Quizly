@@ -19,7 +19,7 @@ public class EventQuestion {
     private String correctAnswer; // "A", "B", "C", "D"
     private long timeLimitSeconds;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "quiz_event_id")
     @JsonIgnore
     private QuizEvent quizEvent;

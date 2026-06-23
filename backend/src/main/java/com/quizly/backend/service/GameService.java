@@ -273,9 +273,10 @@ public class GameService {
         if (questionId == null) return;
 
         Runnable sendQuestion = () -> {
-            session.setQuestionStartTime(System.currentTimeMillis());
-            
-            Map<String, Object> payload = new HashMap<>();
+            try {
+                session.setQuestionStartTime(System.currentTimeMillis());
+                
+                Map<String, Object> payload = new HashMap<>();
             if (session.isEventBased()) {
                 com.quizly.backend.model.EventQuestion q = eventQuestionRepository.findById(questionId).orElse(null);
                 if (q == null) return;
@@ -323,6 +324,10 @@ public class GameService {
                     delay, TimeUnit.MILLISECONDS
             );
             scheduledReveal.put(pin, future);
+            } catch (Exception e) {
+                System.err.println("Exception in broadcastQuestion: " + e.getMessage());
+                e.printStackTrace();
+            }
         };
         sendQuestion.run();
     }
