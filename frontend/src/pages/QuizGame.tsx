@@ -56,7 +56,7 @@ const OPTION_STYLES = [
   { bg: "bg-[#FFA602]", hover: "hover:bg-[#e09502]", icon: "■", label: "D" },
 ]
 
-type Phase = "home" | "lobby_host" | "lobby_player" | "question" | "answer_reveal" | "leaderboard" | "final"
+type Phase = "home" | "lobby_host" | "lobby_player" | "question" | "answer_reveal" | "leaderboard" | "final" | "starting_countdown"
 
 export default function QuizGame() {
   const { userName } = useSelector((state: RootState) => state.auth)
@@ -65,11 +65,14 @@ export default function QuizGame() {
 
   // ─── Game state ─────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>("home")
-  const [pin, setPin] = useState<string | null>(null)
   const [isHost, setIsHost] = useState(false)
+  const [pin, setPin] = useState<string | null>(null)
   const [players, setPlayers] = useState<string[]>([])
-  const [currentQuestion, setCurrentQuestion] = useState<GameQuestion | null>(null)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
+  const [currentQuestion, setCurrentQuestion] = useState<GameQuestion | null>(null)
+  
+  // Countdown State
+  const [countdownValue, setCountdownValue] = useState<number>(3)
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [answerResult, setAnswerResult] = useState<{ isCorrect: boolean; pointsAwarded: number; correctOption: number; totalScore: number } | null>(null)
   const [timeLeft, setTimeLeft] = useState(30)
@@ -90,7 +93,8 @@ export default function QuizGame() {
         setPlayers(data.players || [])
         break
       case "STARTED":
-        setPhase("question")
+        setPhase("starting_countdown")
+        setCountdownValue(3)
         break
       case "QUESTION":
         setCurrentQuestion(data)
@@ -163,6 +167,16 @@ export default function QuizGame() {
     }
     return clearTimer
   }, [phase, currentQuestion])
+
+  // ─── Countdown Timer ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (phase === "starting_countdown") {
+      if (countdownValue > 0) {
+        const timer = setTimeout(() => setCountdownValue(prev => prev - 1), 1000)
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [phase, countdownValue])
 
   // ─── API helpers ─────────────────────────────────────────────────────────
   const token = () => localStorage.getItem("token")
@@ -244,6 +258,22 @@ export default function QuizGame() {
       </motion.div>
 
       <AnimatePresence mode="wait">
+
+        {/* ── STARTING COUNTDOWN ── */}
+        {phase === "starting_countdown" && (
+          <motion.div key="countdown" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 flex items-center justify-center z-50 bg-background/95 backdrop-blur-md">
+            <motion.div 
+              key={countdownValue} 
+              initial={{ opacity: 0, scale: 0.5, y: 20 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 1.5 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              className="text-[15rem] md:text-[20rem] font-black text-primary tracking-tighter drop-shadow-2xl"
+            >
+              {countdownValue > 0 ? countdownValue : "GO!"}
+            </motion.div>
+          </motion.div>
+        )}
 
         {/* ── HOME ── */}
         {phase === "home" && (

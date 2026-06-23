@@ -112,7 +112,12 @@ public class GameService {
         GameSession session = getSession(pin);
         session.setStatus(GameSession.Status.ACTIVE);
         broadcastStatusUpdate(session, "STARTED");
-        broadcastQuestion(session);
+        
+        // Wait 3 seconds to allow frontend to show a 3-2-1 animated countdown
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try { Thread.sleep(3000); } catch (InterruptedException e) {}
+            broadcastQuestion(session);
+        });
     }
 
     public void submitAnswer(String pin, String playerName, Long questionId, int selectedOption) {

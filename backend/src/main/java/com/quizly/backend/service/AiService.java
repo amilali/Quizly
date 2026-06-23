@@ -71,36 +71,54 @@ public class AiService {
             span.tag("quizly.request.count", String.valueOf(request.getCount()));
             span.tag("quizly.request.topic", request.getTopic() != null ? request.getTopic() : "unknown");
             
-            List<Question> generatedQuestions = new ArrayList<>();
             int targetCount = request.getCount();
             
-            for (int i = 0; i < targetCount; i++) {
-                Question newQuestion = generateSingleQuestion(request.getStack(), request.getTopic(), request.getDifficulty(), request.getAvoidStems());
-                newQuestion.setCreatorId(creatorId);
-                newQuestion.setStatus("Draft");
+            // Use Virtual Threads for highly concurrent I/O bound LLM calls
+            try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+                List<CompletableFuture<Question>> futures = new ArrayList<>();
                 
-                // Auto-duplication check: replace if similarity >= 30%
-                int maxRetries = 3;
-                int attempts = 0;
-                boolean isValid = false;
-                
-                while (attempts < maxRetries && !isValid) {
-                    DuplicateCheckResponse checkResponse = checkDuplication(newQuestion);
-                    if (checkResponse.isDuplicate()) {
-                        attempts++;
-                        span.event("duplicate_detected_retrying");
-                        newQuestion = generateSingleQuestion(request.getStack(), request.getTopic(), request.getDifficulty(), request.getAvoidStems());
-                        newQuestion.setCreatorId(creatorId);
-                        newQuestion.setStatus("Draft");
-                    } else {
-                        isValid = true;
-                    }
+                for (int i = 0; i < targetCount; i++) {
+                    CompletableFuture<Question> future = CompletableFuture.supplyAsync(() -> {
+                        Span asyncSpan = tracer.nextSpan().name("async_generate_question").start();
+                        try (Tracer.SpanInScope ws2 = tracer.withSpan(asyncSpan)) {
+                            Question newQuestion = generateSingleQuestion(request.getStack(), request.getTopic(), request.getDifficulty(), request.getAvoidStems());
+                            newQuestion.setCreatorId(creatorId);
+                            newQuestion.setStatus("Draft");
+                            
+                            // Auto-duplication check: replace if similarity >= 30%
+                            int maxRetries = 3;
+                            int attempts = 0;
+                            boolean isValid = false;
+                            
+                            while (attempts < maxRetries && !isValid) {
+                                DuplicateCheckResponse checkResponse = checkDuplication(newQuestion);
+                                if (checkResponse.isDuplicate()) {
+                                    attempts++;
+                                    asyncSpan.event("duplicate_detected_retrying");
+                                    newQuestion = generateSingleQuestion(request.getStack(), request.getTopic(), request.getDifficulty(), request.getAvoidStems());
+                                    newQuestion.setCreatorId(creatorId);
+                                    newQuestion.setStatus("Draft");
+                                } else {
+                                    isValid = true;
+                                }
+                            }
+                            return newQuestion;
+                        } finally {
+                            asyncSpan.end();
+                        }
+                    }, executor);
+                    
+                    futures.add(future);
                 }
                 
-                generatedQuestions.add(newQuestion);
+                // Wait for all questions to be generated in parallel
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+                
+                // Collect results
+                return futures.stream()
+                    .map(CompletableFuture::join)
+                    .collect(Collectors.toList());
             }
-            
-            return generatedQuestions;
         } finally {
             span.end();
         }

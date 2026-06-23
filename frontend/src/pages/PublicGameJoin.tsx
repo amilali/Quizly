@@ -19,7 +19,7 @@ interface GameQuestion {
   stack?: string; topic?: string; difficulty?: string
 }
 interface LeaderboardEntry { playerName: string; score: number }
-type Phase = "join" | "waiting" | "question" | "answer_reveal" | "final"
+type Phase = "join" | "waiting" | "question" | "answer_reveal" | "final" | "starting_countdown"
 
 const spring = { type: "spring" as const, stiffness: 300, damping: 30 }
 
@@ -36,6 +36,7 @@ export default function PublicGameJoin() {
   const [pin, setPin] = useState(() => new URLSearchParams(window.location.search).get("pin") || "")
   const [nickname, setNickname] = useState("")
   const [phase, setPhase] = useState<Phase>("join")
+  const [countdownValue, setCountdownValue] = useState<number>(3)
   const [selectedEmoji, setSelectedEmoji] = useState(EMOJIS[Math.floor(Math.random() * EMOJIS.length)])
   const [joinedPin, setJoinedPin] = useState<string | null>(null)
   const [joinedName, setJoinedName] = useState<string | null>(null)
@@ -55,7 +56,10 @@ export default function PublicGameJoin() {
 
   const onMessage = useCallback((data: any) => {
     if (data.type === "PLAYER_JOINED") setPlayerCount(data.players?.length ?? data.playerCount ?? 0)
-    if (data.type === "STARTED") setPhase("waiting")
+    if (data.type === "STARTED") {
+      setPhase("starting_countdown")
+      setCountdownValue(3)
+    }
     if (data.type === "QUESTION") {
       setQuestion(data); setSelected(null); setTimedOut(false); setResult(null); setCorrectOption(null)
       setTimeLeft(Math.floor((data.timeLimitMs ?? 30000) / 1000)); setPhase("question")
@@ -73,6 +77,15 @@ export default function PublicGameJoin() {
   }, [])
 
   const { sendAnswer } = useGameSocket({ pin: joinedPin, playerName: joinedName, onMessage, onPersonalMessage: onPersonal })
+
+  useEffect(() => {
+    if (phase === "starting_countdown") {
+      if (countdownValue > 0) {
+        const timer = setTimeout(() => setCountdownValue(prev => prev - 1), 1000)
+        return () => clearTimeout(timer)
+      }
+    }
+  }, [phase, countdownValue])
 
   useEffect(() => {
     if (phase !== "question" || !question) return
@@ -146,6 +159,22 @@ export default function PublicGameJoin() {
       <AnimatePresence mode="wait">
 
         {/* ════════════════════════ JOIN ════════════════════════ */}
+        {/* ── STARTING COUNTDOWN ── */}
+        {phase === "starting_countdown" && (
+          <motion.div key="countdown" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 flex items-center justify-center z-50 bg-background/95 backdrop-blur-md">
+            <motion.div 
+              key={countdownValue} 
+              initial={{ opacity: 0, scale: 0.5, y: 20 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 1.5 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              className="text-[15rem] md:text-[20rem] font-black text-primary tracking-tighter drop-shadow-2xl"
+            >
+              {countdownValue > 0 ? countdownValue : "GO!"}
+            </motion.div>
+          </motion.div>
+        )}
+
         {phase === "join" && (
           <motion.div key="join" initial={{ opacity: 0, y: 32 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -24 }} transition={spring} className="w-full max-w-[400px] mx-auto px-5 py-12">
 
