@@ -147,7 +147,10 @@ public class GameService {
         boolean isCorrect = (selectedOption == correctIndex);
 
         // Record business analytics metrics for answers
-        meterRegistry.counter("quizly.answers", "status", isCorrect ? "correct" : "incorrect").increment();
+        meterRegistry.counter("quizly.answers", 
+            "status", isCorrect ? "correct" : "incorrect",
+            "player", playerName != null ? playerName : "unknown"
+        ).increment();
 
         int pointsAwarded = 0;
         if (isCorrect) {

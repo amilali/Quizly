@@ -216,7 +216,7 @@
       },
       "gridPos": {
         "h": 14,
-        "w": 24,
+        "w": 12,
         "x": 0,
         "y": 14
       },
@@ -250,6 +250,36 @@
       "title": "Answers Over Time",
       "transparent": true,
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "id": 4,
+      "options": {
+        "orientation": "horizontal"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by(player) (quizly_answers_total{status=\"correct\"})",
+          "legendFormat": "{{player}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Correct Answers by Player",
+      "transparent": true,
+      "type": "barchart"
     }
   ],
   "refresh": "5s",
