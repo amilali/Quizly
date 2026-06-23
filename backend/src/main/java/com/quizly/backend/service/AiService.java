@@ -125,15 +125,6 @@ public class AiService {
                 - "stem" (string): The question text
                 - "options" (array of 4 strings): The four possible answers
                 - "correctOption" (integer): The 0-based index of the correct answer (0, 1, 2, or 3)
-                
-                Example output:
-                [
-                  {
-                    "stem": "What is 2+2?",
-                    "options": ["1", "2", "3", "4"],
-                    "correctOption": 3
-                  }
-                ]
                 """;
                 
             org.springframework.ai.chat.prompt.PromptTemplate promptTemplate = new org.springframework.ai.chat.prompt.PromptTemplate(promptText);

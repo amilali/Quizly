@@ -17,8 +17,8 @@ initializeFaro({
   },
   transports: [
     new OtlpHttpTransport({
-      tracesURL: 'http://localhost:4318/v1/traces',
-      logsURL: 'http://localhost:4318/v1/logs',
+      tracesURL: '/v1/traces',
+      logsURL: '/v1/logs',
     }),
   ],
   instrumentations: [
