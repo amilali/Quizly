@@ -25,11 +25,14 @@ public class AiService {
     private final QuestionRepository questionRepository;
     private final ChatModel chatModel;
     private final Tracer tracer;
+    private final EmbeddingService embeddingService;
 
-    public AiService(QuestionRepository questionRepository, ChatModel chatModel, Tracer tracer) {
+    public AiService(QuestionRepository questionRepository, ChatModel chatModel,
+                     Tracer tracer, EmbeddingService embeddingService) {
         this.questionRepository = questionRepository;
         this.chatModel = chatModel;
         this.tracer = tracer;
+        this.embeddingService = embeddingService;
     }
 
 
@@ -39,35 +42,51 @@ public class AiService {
         System.out.println("Vector Store skipped — using text-based duplicate detection.");
     }
 
+    // Ordered list of free OpenRouter models to try. Lightest/fastest first.
+    // Falls through to the next if the current model is rate-limited (429).
+    private static final List<String> FALLBACK_MODELS = List.of(
+        "liquid/lfm-2.5-1.2b-instruct:free",            // 1.2B — fastest
+        "meta-llama/llama-3.2-3b-instruct:free",         // 3B — fast
+        "nvidia/nemotron-nano-9b-v2:free",               // 9B — balanced
+        "meta-llama/llama-3.3-70b-instruct:free",        // 70B — high quality
+        "qwen/qwen3-next-80b-a3b-instruct:free",         // 80B MoE — high quality
+        "google/gemma-4-26b-a4b-it:free",               // 26B — Google
+        "nousresearch/hermes-3-llama-3.1-405b:free"      // 405B — last resort
+    );
+
     public List<Question> generateQuestions(GenerateRequest request, String creatorId) {
         Span span = tracer.nextSpan().name("ai_generate_questions").start();
         try (Tracer.SpanInScope ws = tracer.withSpan(span)) {
             span.tag("quizly.request.count", String.valueOf(request.getCount()));
             span.tag("quizly.request.topic", request.getTopic() != null ? request.getTopic() : "unknown");
-            
-            List<Question> generatedQuestions = new ArrayList<>();
-            int maxRetries = 2; // We retry the whole batch a couple of times if the API completely fails
-            int attempts = 0;
-            
-            while (attempts < maxRetries && generatedQuestions.isEmpty()) {
+
+            // Try each model in the fallback chain until one succeeds
+            Exception lastError = null;
+            for (String model : FALLBACK_MODELS) {
                 try {
-                    generatedQuestions = generateQuestionBatch(request.getStack(), request.getTopic(), request.getDifficulty(), request.getCount(), request.getAvoidStems());
-                } catch (Exception e) {
-                    attempts++;
-                    span.event("batch_generation_error_retrying");
-                    if (attempts >= maxRetries) {
-                        System.err.println("Batch generation failed completely: " + e.getMessage());
-                        return new ArrayList<>(); // Return empty list, UI will catch partial/0 success
+                    System.out.println("Trying model: " + model);
+                    List<Question> questions = generateQuestionBatch(
+                        model, request.getStack(), request.getTopic(),
+                        request.getDifficulty(), request.getCount(), request.getAvoidStems()
+                    );
+                    if (questions != null && !questions.isEmpty()) {
+                        questions.forEach(q -> {
+                            q.setCreatorId(creatorId);
+                            q.setStatus("Draft");
+                        });
+                        span.tag("quizly.model.used", model);
+                        System.out.println("Success with model: " + model);
+                        return questions;
                     }
+                } catch (Exception e) {
+                    System.err.println("Model " + model + " failed: " + e.getMessage());
+                    lastError = e;
+                    // Continue to next model
                 }
             }
-            
-            for (Question q : generatedQuestions) {
-                q.setCreatorId(creatorId);
-                q.setStatus("Draft");
-            }
-            
-            return generatedQuestions;
+
+            System.err.println("All models failed. Last error: " + (lastError != null ? lastError.getMessage() : "unknown"));
+            return new ArrayList<>();
         } finally {
             span.end();
         }
@@ -75,14 +94,14 @@ public class AiService {
 
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
-    private List<Question> generateQuestionBatch(String stack, String topic, String difficulty, int count, java.util.List<String> avoidStems) {
+    private List<Question> generateQuestionBatch(String model, String stack, String topic, String difficulty, int count, java.util.List<String> avoidStems) {
         Span span = tracer.nextSpan().name("openai_generate_question_batch").start();
         try (Tracer.SpanInScope ws = tracer.withSpan(span)) {
             String avoidInstruction = "";
             if (avoidStems != null && !avoidStems.isEmpty()) {
                 avoidInstruction = "IMPORTANT: You MUST ensure the generated questions are completely distinct and less than 30% similar to the following questions: " + String.join(" | ", avoidStems) + ". ";
             }
-        
+
             String promptText = """
                 Generate exactly {count} {difficulty} difficulty multiple choice questions about {topic} in {stack}.
                 {avoidInstruction}
@@ -100,7 +119,7 @@ public class AiService {
                 - "options" (array of 4 strings): The four possible answers
                 - "correctOption" (integer): The 0-based index of the correct answer (0, 1, 2, or 3)
                 """;
-                
+
             org.springframework.ai.chat.prompt.PromptTemplate promptTemplate = new org.springframework.ai.chat.prompt.PromptTemplate(promptText);
             org.springframework.ai.chat.prompt.Prompt prompt = promptTemplate.create(Map.of(
                 "count", count,
@@ -109,23 +128,36 @@ public class AiService {
                 "stack", stack,
                 "avoidInstruction", avoidInstruction
             ));
-        
-            var response = chatModel.call(prompt);
+
+            // Override model per-call using ChatOptions
+            org.springframework.ai.chat.prompt.Prompt finalPrompt = new org.springframework.ai.chat.prompt.Prompt(
+                prompt.getInstructions(),
+                org.springframework.ai.openai.OpenAiChatOptions.builder().model(model).build()
+            );
+
+            var response = chatModel.call(finalPrompt);
             String rawJson = response.getResult().getOutput().getText();
-            System.out.println("RAW LLM OUTPUT: " + rawJson);
-            
+            System.out.println("RAW LLM OUTPUT (" + model + "): " + rawJson);
+
             rawJson = rawJson.replaceAll("```json", "").replaceAll("```", "").trim();
-            
+
+            // Extract JSON array if model wrapped it in extra text
+            int start = rawJson.indexOf('[');
+            int end = rawJson.lastIndexOf(']');
+            if (start >= 0 && end > start) {
+                rawJson = rawJson.substring(start, end + 1);
+            }
+
             com.quizly.backend.dto.AiQuestionResponse[] parsedArray = objectMapper.readValue(rawJson, com.quizly.backend.dto.AiQuestionResponse[].class);
-            
+
             if (parsedArray == null || parsedArray.length == 0) {
                 throw new RuntimeException("Generated batch returned null or empty questions list");
             }
-            
+
             List<Question> questions = new ArrayList<>();
             for (com.quizly.backend.dto.AiQuestionResponse dto : parsedArray) {
                 if (dto.getOptions() == null || dto.getOptions().size() != 4) {
-                    continue; // Skip invalid questions instead of throwing, to preserve the rest of the batch
+                    continue;
                 }
                 Question q = new Question();
                 q.setStack(stack);
@@ -136,14 +168,13 @@ public class AiService {
                 q.setCorrectOption(dto.getCorrectOption());
                 questions.add(q);
             }
-            
+
             span.tag("quizly.generation.status", "success");
             return questions;
         } catch (Exception e) {
             span.tag("quizly.generation.status", "error");
             span.error(e);
             System.err.println("Exception in generateQuestionBatch: " + e.getMessage());
-            e.printStackTrace();
             throw new RuntimeException("Failed to generate batch: " + e.getMessage(), e);
         } finally {
             span.end();
@@ -186,8 +217,43 @@ public class AiService {
             }
         }
 
-        // --- 2. Text-based similarity search (vector store disabled) ---
+        // --- 2. Semantic similarity via HF embeddings (if configured) ---
+        float[] newEmbedding = embeddingService.embed(newQuestion.getStem());
+        if (newEmbedding != null) {
+            return semanticSearch(newQuestion, newEmbedding);
+        }
+
+        // --- 3. Fallback: text-based Jaccard similarity ---
         return fallbackTextSearch(newQuestion);
+    }
+
+    private DuplicateCheckResponse semanticSearch(Question newQuestion, float[] newEmbedding) {
+        DuplicateCheckResponse response = new DuplicateCheckResponse();
+        List<DuplicateCheckResponse.SimilarQuestionInfo> similarQuestions = new ArrayList<>();
+        List<Question> existingQuestions = questionRepository.findByStackEntityNameIgnoreCaseAndTopicEntityNameIgnoreCase(
+            newQuestion.getStack(), newQuestion.getTopic()
+        );
+
+        double highestSim = 0.0;
+        for (Question existing : existingQuestions) {
+            if (existing.getId() == null) continue;
+            if (newQuestion.getId() != null && newQuestion.getId().equals(existing.getId())) continue;
+
+            float[] existingEmb = embeddingService.embed(existing.getStem());
+            double sim = embeddingService.cosineSimilarity(newEmbedding, existingEmb);
+
+            if (sim >= 0.75) { // 75% cosine similarity = likely duplicate
+                similarQuestions.add(new DuplicateCheckResponse.SimilarQuestionInfo(
+                    existing.getId(), existing.getStem(), (int)(sim * 100)
+                ));
+                if (sim > highestSim) highestSim = sim;
+            }
+        }
+
+        response.setHighestSimilarity(highestSim);
+        response.setDuplicate(highestSim >= 0.75 && !similarQuestions.isEmpty());
+        response.setSimilarQuestions(similarQuestions);
+        return response;
     }
 
     // Fallback to old text search in case embedding API fails
