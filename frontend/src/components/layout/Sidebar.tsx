@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
-import { FileQuestion, ClipboardCheck, Database, LogOut, MonitorPlay, ChevronLeft, ChevronRight } from "lucide-react"
+import { FileQuestion, ClipboardCheck, Database, LogOut, MonitorPlay } from "lucide-react"
 import { ThemeToggle } from "../ThemeToggle"
 import { Logo } from "../Logo"
 import { cn } from "@/lib/utils"
