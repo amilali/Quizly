@@ -502,6 +502,16 @@ export default function MyQuestions() {
                     Bulk Upload
                   </DialogTitle>
                   <p className="text-sm text-muted-foreground mt-1">Upload a CSV or XLSX file containing multiple questions.</p>
+                  <a
+                    href="/sample-questions.xlsx"
+                    download="sample-questions.xlsx"
+                    className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium text-primary hover:text-primary/80 transition-colors group"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 group-hover:-translate-y-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download sample Excel template
+                  </a>
                 </DialogHeader>
                 {conflictError?.type === 'bulk' && (
                   <div className="border border-red-500/40 rounded-2xl overflow-hidden shadow-sm mb-4">
