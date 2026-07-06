@@ -23,4 +23,9 @@ public class StackController {
     public ResponseEntity<List<Stack>> getAllStacks() {
         return ResponseEntity.ok(stackRepository.findAll());
     }
+
+    @org.springframework.web.bind.annotation.PostMapping
+    public ResponseEntity<Stack> createStack(@org.springframework.web.bind.annotation.RequestBody Stack stack) {
+        return ResponseEntity.ok(stackRepository.save(stack));
+    }
 }

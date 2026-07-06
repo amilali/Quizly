@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
-import { motion } from "framer-motion"
-import { Plus, Trash2, Users, Layers, ArrowRight } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Plus, Trash2, Users, Layers, ArrowRight, X } from "lucide-react"
 import DeleteConfirmModal from "../components/DeleteConfirmModal"
 
 interface User {
@@ -30,6 +30,14 @@ export default function SmeAssignment() {
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; mappingId: number | null }>({
     open: false, mappingId: null
   })
+
+  // Modals for creating SME and Stack
+  const [addSmeModal, setAddSmeModal] = useState(false)
+  const [newSmeId, setNewSmeId] = useState("")
+  const [newSmePassword, setNewSmePassword] = useState("")
+
+  const [addStackModal, setAddStackModal] = useState(false)
+  const [newStackName, setNewStackName] = useState("")
   
   const token = localStorage.getItem("token")
 
@@ -103,6 +111,61 @@ export default function SmeAssignment() {
     }
   }
 
+  const handleAddSme = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newSmeId || !newSmePassword) return
+    
+    try {
+      const res = await fetch("/api/users/smes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId: newSmeId, password: newSmePassword })
+      })
+      
+      if (res.ok) {
+        const data = await res.json()
+        setSmes([...smes, data])
+        setSelectedSme(data.userId)
+        setAddSmeModal(false)
+        setNewSmeId("")
+        setNewSmePassword("")
+      } else {
+        alert("Could not create SME. Might already exist.")
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleAddStack = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newStackName) return
+    
+    try {
+      const res = await fetch("/api/stacks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: newStackName })
+      })
+      
+      if (res.ok) {
+        const data = await res.json()
+        setStacks([...stacks, data])
+        setSelectedStack(String(data.id))
+        setAddStackModal(false)
+        setNewStackName("")
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
   const handleDelete = (id: number) => {
     setDeleteModal({ open: true, mappingId: id })
   }
@@ -126,7 +189,7 @@ export default function SmeAssignment() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-6xl mx-auto space-y-8 relative">
       <div>
         <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-400">SME Assignments</h1>
         <p className="text-muted-foreground mt-1">Assign Subject Matter Experts to Tech Stacks</p>
@@ -137,7 +200,12 @@ export default function SmeAssignment() {
         <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><Plus className="w-5 h-5 text-primary" /> New Assignment</h2>
         <form onSubmit={handleAssign} className="flex flex-col md:flex-row gap-4 items-end relative z-10">
           <div className="flex-1 w-full">
-            <label className="block text-sm font-medium mb-1.5 flex items-center gap-1.5"><Users className="w-4 h-4 text-muted-foreground" /> Select SME</label>
+            <div className="flex justify-between items-center mb-1.5">
+               <label className="text-sm font-medium flex items-center gap-1.5"><Users className="w-4 h-4 text-muted-foreground" /> Select SME</label>
+               <button type="button" onClick={() => setAddSmeModal(true)} className="p-1 hover:bg-muted rounded-md text-primary transition-colors flex items-center gap-1 text-xs font-semibold">
+                  <Plus className="w-3 h-3" /> Add SME
+               </button>
+            </div>
             <select
               required
               value={selectedSme}
@@ -152,7 +220,12 @@ export default function SmeAssignment() {
           </div>
           
           <div className="flex-1 w-full">
-            <label className="block text-sm font-medium mb-1.5 flex items-center gap-1.5"><Layers className="w-4 h-4 text-muted-foreground" /> Select Tech Stack</label>
+            <div className="flex justify-between items-center mb-1.5">
+               <label className="text-sm font-medium flex items-center gap-1.5"><Layers className="w-4 h-4 text-muted-foreground" /> Select Tech Stack</label>
+               <button type="button" onClick={() => setAddStackModal(true)} className="p-1 hover:bg-muted rounded-md text-primary transition-colors flex items-center gap-1 text-xs font-semibold">
+                  <Plus className="w-3 h-3" /> Add Stack
+               </button>
+            </div>
             <select
               required
               value={selectedStack}
@@ -200,15 +273,16 @@ export default function SmeAssignment() {
                     {mapping.enterpriseId.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <h3 className="font-bold text-lg text-foreground">{mapping.enterpriseId}</h3>
-                    <p className="text-sm font-medium text-primary flex items-center gap-1"><Layers className="w-3.5 h-3.5" /> {mapping.stack.name}</p>
+                    <h3 className="font-bold text-foreground leading-tight">{mapping.enterpriseId}</h3>
+                    <p className="text-sm font-semibold text-primary mt-0.5 flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5" />
+                      {mapping.stack.name}
+                    </p>
                   </div>
                 </div>
-                
                 <button
                   onClick={() => handleDelete(mapping.id)}
-                  title="Remove Assignment"
-                  className="w-10 h-10 rounded-full bg-secondary hover:bg-red-500/20 text-muted-foreground hover:text-red-400 flex items-center justify-center transition-all"
+                  className="w-8 h-8 rounded-full bg-destructive/10 text-destructive flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/20"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -219,13 +293,140 @@ export default function SmeAssignment() {
       </div>
 
       <DeleteConfirmModal
-        open={deleteModal.open}
-        title="Remove Assignment"
-        description="Are you sure you want to remove this SME from the selected tech stack?"
-        confirmLabel="Remove"
+        isOpen={deleteModal.open}
+        onClose={() => setDeleteModal({ open: false, mappingId: null })}
         onConfirm={confirmDelete}
-        onCancel={() => setDeleteModal({ open: false, mappingId: null })}
+        title="Delete Assignment"
+        message="Are you sure you want to delete this assignment? The SME will no longer be mapped to this tech stack."
       />
+
+      {/* Add SME Modal */}
+      <AnimatePresence>
+        {addSmeModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-card border border-border/50 shadow-2xl rounded-2xl p-6 w-full max-w-md relative"
+            >
+              <button
+                onClick={() => setAddSmeModal(false)}
+                className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <h2 className="text-xl font-bold mb-1">Add New SME</h2>
+              <p className="text-sm text-muted-foreground mb-6">Create a new Subject Matter Expert account.</p>
+              
+              <form onSubmit={handleAddSme} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Enterprise ID / Username</label>
+                  <input
+                    type="text"
+                    required
+                    value={newSmeId}
+                    onChange={(e) => setNewSmeId(e.target.value)}
+                    className="w-full bg-background/50 border border-border/50 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary/50"
+                    placeholder="e.g. john.doe"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Initial Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={newSmePassword}
+                    onChange={(e) => setNewSmePassword(e.target.value)}
+                    className="w-full bg-background/50 border border-border/50 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary/50"
+                    placeholder="Enter password"
+                  />
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setAddSmeModal(false)}
+                    className="px-4 py-2 rounded-lg font-medium hover:bg-muted transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-lg font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                  >
+                    Create SME
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Tech Stack Modal */}
+      <AnimatePresence>
+        {addStackModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-card border border-border/50 shadow-2xl rounded-2xl p-6 w-full max-w-md relative"
+            >
+              <button
+                onClick={() => setAddStackModal(false)}
+                className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <h2 className="text-xl font-bold mb-1">Add Tech Stack</h2>
+              <p className="text-sm text-muted-foreground mb-6">Define a new technology stack.</p>
+              
+              <form onSubmit={handleAddStack} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Stack Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={newStackName}
+                    onChange={(e) => setNewStackName(e.target.value)}
+                    className="w-full bg-background/50 border border-border/50 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-primary/50"
+                    placeholder="e.g. React Native, AWS, MongoDB..."
+                  />
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setAddStackModal(false)}
+                    className="px-4 py-2 rounded-lg font-medium hover:bg-muted transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-lg font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                  >
+                    Create Stack
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   )
 }
