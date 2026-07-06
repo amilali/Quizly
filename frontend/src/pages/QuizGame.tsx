@@ -363,7 +363,7 @@ export default function QuizGame() {
                   >
                     {pin}
                   </div>
-                  <p className="text-xs text-muted-foreground">Go to <span className="font-semibold text-foreground">{window.location.origin}/join</span></p>
+                  {/* <p className="text-xs text-muted-foreground">Go to <span className="font-semibold text-foreground">{window.location.origin}/join</span></p> */}
                 </div>
 
                 {/* SCAN TO JOIN */}

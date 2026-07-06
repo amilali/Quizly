@@ -39,10 +39,26 @@ export default function QuizEventDetail() {
   const [apStack, setApStack] = useState("")
   const [apTopic, setApTopic] = useState("")
   const [apCount, setApCount] = useState(10)
+  const [approvedQuestions, setApprovedQuestions] = useState<any[]>([])
 
   useEffect(() => {
     fetchEvent()
   }, [eventId])
+
+  useEffect(() => {
+    if (showAutoPull) {
+      fetch("/api/questions", {
+        headers: { "Authorization": `Bearer ${token}` }
+      })
+      .then(res => res.json())
+      .then(data => {
+        const approved = Array.isArray(data) ? data.filter((q: any) => q.status === "Approved") : [];
+        setApprovedQuestions(approved);
+      })
+      .catch(console.error);
+    }
+  }, [showAutoPull, token])
+
 
   const fetchEvent = async () => {
     try {
@@ -435,11 +451,43 @@ export default function QuizEventDetail() {
             <form onSubmit={handleAutoPull} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Tech Stack</label>
-                <input type="text" value={apStack} onChange={e => setApStack(e.target.value)} placeholder="e.g. React" className="w-full bg-background/50 border border-border/50 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary/50 outline-none" />
+                <input 
+                  type="text" 
+                  list="approved-stacks"
+                  value={apStack} 
+                  onChange={e => {
+                    setApStack(e.target.value);
+                    setApTopic(""); // Reset topic when stack changes
+                  }} 
+                  placeholder="e.g. React" 
+                  className="w-full bg-background/50 border border-border/50 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary/50 outline-none" 
+                />
+                <datalist id="approved-stacks">
+                  {Array.from(new Set(approvedQuestions.map(q => q.stack).filter(Boolean))).map(stack => (
+                    <option key={stack} value={stack} />
+                  ))}
+                </datalist>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Topic</label>
-                <input type="text" value={apTopic} onChange={e => setApTopic(e.target.value)} placeholder="e.g. Hooks" className="w-full bg-background/50 border border-border/50 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary/50 outline-none" />
+                <input 
+                  type="text" 
+                  list="approved-topics"
+                  value={apTopic} 
+                  onChange={e => setApTopic(e.target.value)} 
+                  placeholder="e.g. Hooks" 
+                  className="w-full bg-background/50 border border-border/50 rounded-lg px-4 py-2 focus:ring-2 focus:ring-primary/50 outline-none" 
+                />
+                <datalist id="approved-topics">
+                  {Array.from(new Set(
+                    approvedQuestions
+                      .filter(q => !apStack || q.stack === apStack)
+                      .map(q => q.topic)
+                      .filter(Boolean)
+                  )).map(topic => (
+                    <option key={topic} value={topic} />
+                  ))}
+                </datalist>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Question Count</label>

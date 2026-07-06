@@ -18,16 +18,46 @@ public class AnalyticsController {
         this.gameAnswerRepository = gameAnswerRepository;
     }
 
+    private Instant parseDate(String dateStr, boolean endOfDay) {
+        if (dateStr == null || dateStr.trim().isEmpty()) return null;
+        try {
+            java.time.LocalDate date = java.time.LocalDate.parse(dateStr);
+            if (endOfDay) {
+                return date.atTime(23, 59, 59).atZone(java.time.ZoneId.systemDefault()).toInstant();
+            } else {
+                return date.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant();
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Instant getSince(Integer days, String startDate) {
+        Instant parsedStart = parseDate(startDate, false);
+        if (parsedStart != null) return parsedStart;
+        if (days == null || days <= 0) {
+            return Instant.EPOCH; // All time
+        }
+        return Instant.now().minus(days, ChronoUnit.DAYS);
+    }
+
+    private Instant getUntil(String endDate) {
+        Instant parsedEnd = parseDate(endDate, true);
+        if (parsedEnd != null) return parsedEnd;
+        return Instant.now();
+    }
+
     /** Overview stats: total games, players, answers, accuracy */
     @GetMapping("/overview")
-    public ResponseEntity<?> getOverview() {
-        long totalAnswers = gameAnswerRepository.count();
-        long totalGames = gameAnswerRepository.countDistinctGames();
-        long totalPlayers = gameAnswerRepository.countDistinctPlayers();
-
-        long correctAnswers = gameAnswerRepository.findAll().stream()
-                .filter(a -> Boolean.TRUE.equals(a.getCorrect()))
-                .count();
+    public ResponseEntity<?> getOverview(@RequestParam(required = false) Integer days,
+                                         @RequestParam(required = false) String startDate,
+                                         @RequestParam(required = false) String endDate) {
+        Instant since = getSince(days, startDate);
+        Instant until = getUntil(endDate);
+        long totalAnswers = gameAnswerRepository.countAnswersSince(since, until);
+        long totalGames = gameAnswerRepository.countDistinctGames(since, until);
+        long totalPlayers = gameAnswerRepository.countDistinctPlayers(since, until);
+        long correctAnswers = gameAnswerRepository.countCorrectAnswersSince(since, until);
 
         double accuracy = totalAnswers > 0 ? (double) correctAnswers / totalAnswers * 100 : 0;
 
@@ -42,8 +72,12 @@ public class AnalyticsController {
 
     /** Per-player performance: name, correct, incorrect, accuracy, total points */
     @GetMapping("/players")
-    public ResponseEntity<?> getPlayerStats() {
-        List<Object[]> raw = gameAnswerRepository.getPlayerSummary();
+    public ResponseEntity<?> getPlayerStats(@RequestParam(required = false) Integer days,
+                                            @RequestParam(required = false) String startDate,
+                                            @RequestParam(required = false) String endDate) {
+        Instant since = getSince(days, startDate);
+        Instant until = getUntil(endDate);
+        List<Object[]> raw = gameAnswerRepository.getPlayerSummary(since, until);
         List<Map<String, Object>> result = new ArrayList<>();
 
         for (Object[] row : raw) {
@@ -68,8 +102,12 @@ public class AnalyticsController {
 
     /** Per-question difficulty: stem, stack, topic, correct%, total attempts */
     @GetMapping("/questions")
-    public ResponseEntity<?> getQuestionStats() {
-        List<Object[]> raw = gameAnswerRepository.getQuestionDifficulty();
+    public ResponseEntity<?> getQuestionStats(@RequestParam(required = false) Integer days,
+                                              @RequestParam(required = false) String startDate,
+                                              @RequestParam(required = false) String endDate) {
+        Instant since = getSince(days, startDate);
+        Instant until = getUntil(endDate);
+        List<Object[]> raw = gameAnswerRepository.getQuestionDifficulty(since, until);
         List<Map<String, Object>> result = new ArrayList<>();
 
         for (Object[] row : raw) {
@@ -97,9 +135,12 @@ public class AnalyticsController {
 
     /** Activity timeline: answers bucketed by hour over the last N days */
     @GetMapping("/timeline")
-    public ResponseEntity<?> getTimeline(@RequestParam(defaultValue = "7") int days) {
-        Instant since = Instant.now().minus(days, ChronoUnit.DAYS);
-        List<Object[]> raw = gameAnswerRepository.getTimeline(since);
+    public ResponseEntity<?> getTimeline(@RequestParam(required = false) Integer days,
+                                         @RequestParam(required = false) String startDate,
+                                         @RequestParam(required = false) String endDate) {
+        Instant since = getSince(days != null ? days : 7, startDate);
+        Instant until = getUntil(endDate);
+        List<Object[]> raw = gameAnswerRepository.getTimeline(since, until);
 
         // Bucket by hour
         Map<String, long[]> buckets = new TreeMap<>();
