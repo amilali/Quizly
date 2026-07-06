@@ -8,6 +8,8 @@ import PublicGameJoin from "./pages/PublicGameJoin"
 import QuizEventDashboard from "./pages/QuizEventDashboard"
 import QuizEventDetail from "./pages/QuizEventDetail"
 import Analytics from "./pages/Analytics"
+import SmeAssignment from "./pages/SmeAssignment"
+import AiSensei from "./pages/AiSensei"
 import { motion, AnimatePresence } from "framer-motion"
 import { ThemeProvider } from "./components/theme-provider"
 import { useSelector } from "react-redux"
@@ -44,13 +46,13 @@ function App() {
                 <div className="absolute top-[20%] right-[20%] w-[40%] h-[40%] bg-[#d946ef]/5 dark:bg-[#d946ef]/10 blur-[120px] rounded-full pointer-events-none mix-blend-multiply dark:mix-blend-screen" />
 
                 <Sidebar />
-                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 relative z-10 w-full custom-scrollbar">
+                <main className="flex-1 overflow-hidden p-4 sm:p-6 md:p-8 relative z-10 w-full flex flex-col">
                   <AnimatePresence mode="wait">
                     <motion.div
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.5, ease: "easeOut" }}
-                      className="min-h-full max-w-7xl mx-auto w-full"
+                      className="flex-1 max-w-7xl mx-auto w-full flex flex-col overflow-y-auto custom-scrollbar"
                     >
                       <Routes>
                         <Route path="/" element={<Navigate to="/my-questions" replace />} />
@@ -61,6 +63,8 @@ function App() {
                         <Route path="/events/:eventId" element={<QuizEventDetail />} />
                         <Route path="/analytics" element={<Analytics />} />
                         <Route path="/quiz-game" element={<QuizGame />} />
+                        <Route path="/sme-assignment" element={<SmeAssignment />} />
+                        <Route path="/ai-sensei" element={<AiSensei />} />
                       </Routes>
                     </motion.div>
                   </AnimatePresence>

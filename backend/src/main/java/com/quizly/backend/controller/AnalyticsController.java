@@ -18,16 +18,21 @@ public class AnalyticsController {
         this.gameAnswerRepository = gameAnswerRepository;
     }
 
+    private Instant getSince(Integer days) {
+        if (days == null || days <= 0) {
+            return Instant.EPOCH; // All time
+        }
+        return Instant.now().minus(days, ChronoUnit.DAYS);
+    }
+
     /** Overview stats: total games, players, answers, accuracy */
     @GetMapping("/overview")
-    public ResponseEntity<?> getOverview() {
-        long totalAnswers = gameAnswerRepository.count();
-        long totalGames = gameAnswerRepository.countDistinctGames();
-        long totalPlayers = gameAnswerRepository.countDistinctPlayers();
-
-        long correctAnswers = gameAnswerRepository.findAll().stream()
-                .filter(a -> Boolean.TRUE.equals(a.getCorrect()))
-                .count();
+    public ResponseEntity<?> getOverview(@RequestParam(required = false) Integer days) {
+        Instant since = getSince(days);
+        long totalAnswers = gameAnswerRepository.countAnswersSince(since);
+        long totalGames = gameAnswerRepository.countDistinctGames(since);
+        long totalPlayers = gameAnswerRepository.countDistinctPlayers(since);
+        long correctAnswers = gameAnswerRepository.countCorrectAnswersSince(since);
 
         double accuracy = totalAnswers > 0 ? (double) correctAnswers / totalAnswers * 100 : 0;
 
@@ -42,8 +47,9 @@ public class AnalyticsController {
 
     /** Per-player performance: name, correct, incorrect, accuracy, total points */
     @GetMapping("/players")
-    public ResponseEntity<?> getPlayerStats() {
-        List<Object[]> raw = gameAnswerRepository.getPlayerSummary();
+    public ResponseEntity<?> getPlayerStats(@RequestParam(required = false) Integer days) {
+        Instant since = getSince(days);
+        List<Object[]> raw = gameAnswerRepository.getPlayerSummary(since);
         List<Map<String, Object>> result = new ArrayList<>();
 
         for (Object[] row : raw) {
@@ -68,8 +74,9 @@ public class AnalyticsController {
 
     /** Per-question difficulty: stem, stack, topic, correct%, total attempts */
     @GetMapping("/questions")
-    public ResponseEntity<?> getQuestionStats() {
-        List<Object[]> raw = gameAnswerRepository.getQuestionDifficulty();
+    public ResponseEntity<?> getQuestionStats(@RequestParam(required = false) Integer days) {
+        Instant since = getSince(days);
+        List<Object[]> raw = gameAnswerRepository.getQuestionDifficulty(since);
         List<Map<String, Object>> result = new ArrayList<>();
 
         for (Object[] row : raw) {
