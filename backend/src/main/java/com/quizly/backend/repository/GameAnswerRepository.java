@@ -23,11 +23,11 @@ public interface GameAnswerRepository extends JpaRepository<GameAnswer, Long> {
                SUM(CASE WHEN g.correct = true THEN 1 ELSE 0 END) as correctAnswers,
                SUM(g.pointsAwarded) as totalPoints
         FROM GameAnswer g
-        WHERE g.answeredAt >= :since
+        WHERE g.answeredAt >= :since AND g.answeredAt <= :until
         GROUP BY g.playerName
         ORDER BY SUM(g.pointsAwarded) DESC
     """)
-    List<Object[]> getPlayerSummary(@Param("since") Instant since);
+    List<Object[]> getPlayerSummary(@Param("since") Instant since, @Param("until") Instant until);
 
     // Summary per question: question stem, stack, topic, correct count, total count
     @Query("""
@@ -38,31 +38,31 @@ public interface GameAnswerRepository extends JpaRepository<GameAnswer, Long> {
                COUNT(g) as totalAttempts,
                SUM(CASE WHEN g.correct = true THEN 1 ELSE 0 END) as correctCount
         FROM GameAnswer g
-        WHERE g.answeredAt >= :since
+        WHERE g.answeredAt >= :since AND g.answeredAt <= :until
         GROUP BY g.questionId, g.questionStem, g.questionStack, g.questionTopic
         ORDER BY COUNT(g) DESC
     """)
-    List<Object[]> getQuestionDifficulty(@Param("since") Instant since);
+    List<Object[]> getQuestionDifficulty(@Param("since") Instant since, @Param("until") Instant until);
 
     // Timeline: answers grouped by hour in the last N days
     @Query("""
         SELECT g.answeredAt, g.correct
         FROM GameAnswer g
-        WHERE g.answeredAt >= :since
+        WHERE g.answeredAt >= :since AND g.answeredAt <= :until
         ORDER BY g.answeredAt ASC
     """)
-    List<Object[]> getTimeline(@Param("since") Instant since);
+    List<Object[]> getTimeline(@Param("since") Instant since, @Param("until") Instant until);
 
     // Overview counts
-    @Query("SELECT COUNT(DISTINCT g.pin) FROM GameAnswer g WHERE g.answeredAt >= :since")
-    long countDistinctGames(@Param("since") Instant since);
+    @Query("SELECT COUNT(DISTINCT g.pin) FROM GameAnswer g WHERE g.answeredAt >= :since AND g.answeredAt <= :until")
+    long countDistinctGames(@Param("since") Instant since, @Param("until") Instant until);
 
-    @Query("SELECT COUNT(DISTINCT g.playerName) FROM GameAnswer g WHERE g.answeredAt >= :since")
-    long countDistinctPlayers(@Param("since") Instant since);
+    @Query("SELECT COUNT(DISTINCT g.playerName) FROM GameAnswer g WHERE g.answeredAt >= :since AND g.answeredAt <= :until")
+    long countDistinctPlayers(@Param("since") Instant since, @Param("until") Instant until);
 
-    @Query("SELECT COUNT(g) FROM GameAnswer g WHERE g.answeredAt >= :since")
-    long countAnswersSince(@Param("since") Instant since);
+    @Query("SELECT COUNT(g) FROM GameAnswer g WHERE g.answeredAt >= :since AND g.answeredAt <= :until")
+    long countAnswersSince(@Param("since") Instant since, @Param("until") Instant until);
 
-    @Query("SELECT COUNT(g) FROM GameAnswer g WHERE g.correct = true AND g.answeredAt >= :since")
-    long countCorrectAnswersSince(@Param("since") Instant since);
+    @Query("SELECT COUNT(g) FROM GameAnswer g WHERE g.correct = true AND g.answeredAt >= :since AND g.answeredAt <= :until")
+    long countCorrectAnswersSince(@Param("since") Instant since, @Param("until") Instant until);
 }

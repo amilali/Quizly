@@ -100,7 +100,9 @@ export default function Analytics() {
   const role = useSelector((state: RootState) => state.auth.role);
   const token = localStorage.getItem("token");
 
-  const [days, setDays] = useState<number | null>(7);
+  const [days, setDays] = useState<number | "all" | "custom">(7);
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [players, setPlayers] = useState<PlayerStat[]>([]);
   const [questions, setQuestions] = useState<QuestionStat[]>([]);
@@ -119,7 +121,18 @@ export default function Analytics() {
   useEffect(() => {
     setLoading(true);
     const headers = { Authorization: `Bearer ${token}` };
-    const query = days ? `?days=${days}` : "";
+    let query = "";
+    if (days === "custom") {
+      if (startDate && endDate) {
+        query = `?startDate=${startDate}&endDate=${endDate}`;
+      } else {
+        // Do not fetch until both dates are selected
+        setLoading(false);
+        return;
+      }
+    } else if (days !== "all") {
+      query = `?days=${days}`;
+    }
     
     Promise.all([
       fetch(`/api/analytics/overview${query}`, { headers }).then((r) => r.json()),
@@ -136,7 +149,7 @@ export default function Analytics() {
         setError("Could not load analytics data. Make sure a game has been played.");
         setLoading(false);
       });
-  }, [token, days]);
+  }, [token, days, startDate, endDate]);
 
   const pieData = overview ? [
     { name: "Correct", value: overview.correctAnswers },
@@ -156,18 +169,49 @@ export default function Analytics() {
           </p>
         </div>
         
-        <div className="flex items-center gap-2 bg-card border border-border/50 rounded-lg px-2 shadow-sm">
-           <Calendar size={14} className="text-muted-foreground" />
-           <select 
-             value={days === null ? "all" : days}
-             onChange={(e) => setDays(e.target.value === "all" ? null : Number(e.target.value))}
-             className="bg-transparent border-none text-sm font-medium outline-none py-1.5 focus:ring-0 cursor-pointer"
-           >
-             <option value={1}>Today</option>
-             <option value={7}>Last 7 Days</option>
-             <option value={30}>Last 30 Days</option>
-             <option value="all">All Time</option>
-           </select>
+        <div className="flex flex-col sm:flex-row items-end gap-3">
+          {days === "custom" && (
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 bg-card border border-border/50 rounded-lg px-3 py-1.5 shadow-sm">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Start</span>
+                <input 
+                  type="date" 
+                  value={startDate} 
+                  onChange={e => setStartDate(e.target.value)}
+                  className="bg-transparent border-none text-sm font-medium outline-none focus:ring-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                />
+              </div>
+              <div className="w-px h-4 bg-border/50"></div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">End</span>
+                <input 
+                  type="date" 
+                  value={endDate} 
+                  onChange={e => setEndDate(e.target.value)}
+                  className="bg-transparent border-none text-sm font-medium outline-none focus:ring-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                />
+              </div>
+            </motion.div>
+          )}
+          
+          <div className="flex items-center gap-2 bg-card border border-border/50 rounded-lg px-2 shadow-sm h-[38px]">
+             <Calendar size={14} className="text-muted-foreground" />
+             <select 
+               value={days}
+               onChange={(e) => {
+                 const val = e.target.value;
+                 if (val === "all" || val === "custom") setDays(val);
+                 else setDays(Number(val));
+               }}
+               className="bg-transparent border-none text-sm font-medium outline-none py-1.5 focus:ring-0 cursor-pointer"
+             >
+               <option value={1}>Today</option>
+               <option value={7}>Last 7 Days</option>
+               <option value={30}>Last 30 Days</option>
+               <option value="all">All Time</option>
+               <option value="custom">Custom Date Range</option>
+             </select>
+          </div>
         </div>
       </motion.div>
 
