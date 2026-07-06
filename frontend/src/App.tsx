@@ -12,6 +12,7 @@ import SmeAssignment from "./pages/SmeAssignment"
 import AiSensei from "./pages/AiSensei"
 import { motion, AnimatePresence } from "framer-motion"
 import { ThemeProvider } from "./components/theme-provider"
+import { Toaster } from "./components/ui/sonner"
 import { useSelector } from "react-redux"
 import type { RootState } from "./store"
 import Login from "./pages/Login"
@@ -22,6 +23,7 @@ function App() {
 
   return (
     <ThemeProvider defaultTheme="dark">
+      <Toaster richColors position="top-right" />
       <Router>
         <Routes>
           {/* ── Public route — no login required ── */}

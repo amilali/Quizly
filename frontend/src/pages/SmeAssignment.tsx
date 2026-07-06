@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Plus, Trash2, Users, Layers, ArrowRight, X } from "lucide-react"
 import DeleteConfirmModal from "../components/DeleteConfirmModal"
+import { toast } from "sonner"
 
 interface User {
   userId: string;
@@ -54,9 +55,12 @@ export default function SmeAssignment() {
       })
       if (res.ok) {
         setSmes(await res.json())
+      } else {
+        toast.error("Failed to load SMEs")
       }
     } catch (e) {
       console.error(e)
+      toast.error("An error occurred while loading SMEs")
     }
   }
 
@@ -67,9 +71,12 @@ export default function SmeAssignment() {
       })
       if (res.ok) {
         setStacks(await res.json())
+      } else {
+        toast.error("Failed to load Tech Stacks")
       }
     } catch (e) {
       console.error(e)
+      toast.error("An error occurred while loading Tech Stacks")
     }
   }
 
@@ -80,15 +87,21 @@ export default function SmeAssignment() {
       })
       if (res.ok) {
         setMappings(await res.json())
+      } else {
+        toast.error("Failed to load Assignments")
       }
     } catch (e) {
       console.error(e)
+      toast.error("An error occurred while loading Assignments")
     }
   }
 
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedSme || !selectedStack) return
+    if (!selectedSme || !selectedStack) {
+      toast.error("Please select both an SME and a Tech Stack")
+      return
+    }
     
     try {
       const res = await fetch("/api/sme-mappings", {
@@ -105,15 +118,23 @@ export default function SmeAssignment() {
         setMappings([...mappings, data])
         setSelectedSme("")
         setSelectedStack("")
+        toast.success("Assignment created successfully!")
+      } else {
+        const errorData = await res.json().catch(() => ({}))
+        toast.error(errorData.message || "Failed to create assignment")
       }
     } catch (e) {
       console.error(e)
+      toast.error("An error occurred while creating assignment")
     }
   }
 
   const handleAddSme = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newSmeId || !newSmePassword) return
+    if (!newSmeId || !newSmePassword) {
+      toast.error("Please fill in all fields")
+      return
+    }
     
     try {
       const res = await fetch("/api/users/smes", {
@@ -132,17 +153,22 @@ export default function SmeAssignment() {
         setAddSmeModal(false)
         setNewSmeId("")
         setNewSmePassword("")
+        toast.success("SME created successfully!")
       } else {
-        alert("Could not create SME. Might already exist.")
+        toast.error("Could not create SME. Might already exist.")
       }
     } catch (e) {
       console.error(e)
+      toast.error("An error occurred while creating SME")
     }
   }
 
   const handleAddStack = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newStackName) return
+    if (!newStackName) {
+      toast.error("Please enter a stack name")
+      return
+    }
     
     try {
       const res = await fetch("/api/stacks", {
@@ -160,9 +186,13 @@ export default function SmeAssignment() {
         setSelectedStack(String(data.id))
         setAddStackModal(false)
         setNewStackName("")
+        toast.success("Tech Stack created successfully!")
+      } else {
+        toast.error("Failed to create Tech Stack")
       }
     } catch (e) {
       console.error(e)
+      toast.error("An error occurred while creating Tech Stack")
     }
   }
 
@@ -182,9 +212,13 @@ export default function SmeAssignment() {
       })
       if (res.ok) {
         setMappings(mappings.filter(m => m.id !== id))
+        toast.success("Assignment deleted successfully!")
+      } else {
+        toast.error("Failed to delete assignment")
       }
     } catch (e) {
       console.error(e)
+      toast.error("An error occurred while deleting assignment")
     }
   }
 
@@ -293,11 +327,11 @@ export default function SmeAssignment() {
       </div>
 
       <DeleteConfirmModal
-        isOpen={deleteModal.open}
-        onClose={() => setDeleteModal({ open: false, mappingId: null })}
+        open={deleteModal.open}
+        onCancel={() => setDeleteModal({ open: false, mappingId: null })}
         onConfirm={confirmDelete}
         title="Delete Assignment"
-        message="Are you sure you want to delete this assignment? The SME will no longer be mapped to this tech stack."
+        description="Are you sure you want to delete this assignment? The SME will no longer be mapped to this tech stack."
       />
 
       {/* Add SME Modal */}
